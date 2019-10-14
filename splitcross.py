@@ -28,7 +28,7 @@ class SplitCrossEntropyLoss(nn.Module):
             self.tail_bias = nn.Parameter(torch.zeros(self.nsplits - 1))
 
     def logprob(self, weight, bias, hiddens, splits=None, softmaxed_head_res=None, verbose=False):
-        # First we perform the first softmax on the head vocabulary and the tombstones
+        # If not provided softmaxed_head_res, we need to caculate it.
         if softmaxed_head_res is None:
             start, end = self.splits[0], self.splits[1]
             head_weight = None if end - start == 0 else weight[start:end]
@@ -38,8 +38,7 @@ class SplitCrossEntropyLoss(nn.Module):
                 head_weight = self.tail_vectors if head_weight is None else torch.cat([head_weight, self.tail_vectors])
                 head_bias = self.tail_bias if head_bias is None else torch.cat([head_bias, self.tail_bias])
 
-            # Perform the softmax calculation for the word vectors in the head for all splits
-            # We need to guard against empty splits as torch.cat does not like random lists
+            # Perform the softmax calculation for  ```hiddens```
             head_res = torch.nn.functional.linear(hiddens, head_weight, bias=head_bias)
             softmaxed_head_res = torch.nn.functional.log_softmax(head_res, dim=-1)
 
@@ -54,7 +53,8 @@ class SplitCrossEntropyLoss(nn.Module):
             if idx == 0:
                 results.append(softmaxed_head_res[:, :-(self.nsplits - 1)])
 
-            # If the target is in one of the splits, the probability is the p(tombstone) * p(word within tombstone)
+            # If the target is in one of the splits, 
+            # the probability is the p(tombstone) * p(word within tombstone)
             else:
                 start, end = self.splits[idx], self.splits[idx + 1]
                 tail_weight = weight[start:end]
@@ -62,11 +62,11 @@ class SplitCrossEntropyLoss(nn.Module):
 
                 # Calculate the softmax for the words in the tombstone
                 tail_res = torch.nn.functional.linear(hiddens, tail_weight, bias=tail_bias)
-
-                # Then we calculate p(tombstone) * p(word in tombstone)
-                # Adding is equivalent to multiplication in log space
-                head_entropy = (softmaxed_head_res[:, -idx]).contiguous()
                 tail_entropy = torch.nn.functional.log_softmax(tail_res, dim=-1)
+                # Then we calculate p(tombstone) * p(word in tombstone)
+                # Adding in log space is equivalent to multiplication
+                # The below extracts the P(tombstone) of the idx'th split
+                head_entropy = (softmaxed_head_res[:, -(self.nsplits - idx)]).contiguous()
                 results.append(head_entropy.view(-1, 1) + tail_entropy)
 
         if len(results) > 1:
@@ -149,7 +149,7 @@ class SplitCrossEntropyLoss(nn.Module):
         all_head_res = torch.nn.functional.linear(combo, head_weight, bias=head_bias)
         softmaxed_all_head_res = torch.nn.functional.log_softmax(all_head_res, dim=-1)
         if self.verbose or verbose:
-            self.stats[0].append(combo.size()[0] * head_weight.size()[0])
+            self.stats[0].append((combo.size()[0], head_weight.size()[0]))
 
         running_offset = 0
         for idx in range(self.nsplits):
@@ -169,21 +169,17 @@ class SplitCrossEntropyLoss(nn.Module):
                 if self.verbose or verbose:
                     start, end = self.splits[idx], self.splits[idx + 1]
                     tail_weight = weight[start:end]
-                    self.stats[idx].append(split_hiddens[idx].size()[0] * tail_weight.size()[0])
+                    self.stats[idx].append((split_hiddens[idx].size()[0], tail_weight.size()[0]))
 
-                # Calculate the softmax for the words in the tombstone
+                # Calculate the softmax for the words and p(tombstone)*p(words in tombstone)
                 tail_res = self.logprob(weight, bias, split_hiddens[idx], splits=[idx],
                                         softmaxed_head_res=softmaxed_head_res)
 
-                # Then we calculate p(tombstone) * p(word in tombstone)
-                # Adding is equivalent to multiplication in log space
-                head_entropy = softmaxed_head_res[:, -idx]
-                # All indices are shifted - if the first split handles [0,...,499] then the 500th in the second split will be 0 indexed
+                # All indices are shifted - if the first split handles [0,...,499] 
+                # then the 500th in the second split will be 0 indexed
                 indices = (split_targets[idx] - self.splits[idx]).view(-1, 1)
                 # Warning: if you don't squeeze, you get an N x 1 return, which acts oddly with broadcasting
-                tail_entropy = torch.gather(torch.nn.functional.log_softmax(tail_res, dim=-1), dim=1,
-                                            index=indices).squeeze()
-                entropy = -(head_entropy + tail_entropy)
+                entropy = -torch.gather(tail_res, dim=1, index=indices).squeeze()
             ###
             running_offset += len(split_hiddens[idx])
             total_loss = entropy.float().sum() if total_loss is None else total_loss + entropy.float().sum()
@@ -203,7 +199,7 @@ if __name__ == '__main__':
     E = 10
 
     embed = torch.nn.Embedding(V, H)
-    crit = SplitCrossEntropyLoss(hidden_size=H, splits=[V // 2])
+    crit = SplitCrossEntropyLoss(hidden_size=H, splits=[V // 2], verbose=True)
     bias = torch.nn.Parameter(torch.ones(V))
     optimizer = torch.optim.SGD(list(embed.parameters()) + list(crit.parameters()), lr=1)
 
