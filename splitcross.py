@@ -1,6 +1,6 @@
 """
-Modified by Pan Yicheng  @ Oct, 8, 2019
-For torch==1.0.1.post2
+Modified by Pan Yicheng  @ Oct, 16, 2019
+For torch==1.3.0
 """
 from collections import defaultdict
 import torch
@@ -9,8 +9,7 @@ import numpy as np
 
 
 class SplitCrossEntropyLoss(nn.Module):
-    r'''SplitCrossEntropyLoss calculates an approximate softmax'''
-
+    r"""SplitCrossEntropyLoss calculates an approximate softmax"""
     def __init__(self, hidden_size, splits, verbose=False):
         # We assume splits is [0, split1, split2, N] where N >= TokenNum
         # For example, a vocab of 1000 words may have splits [0] + [100, 500] + [inf]
@@ -28,7 +27,7 @@ class SplitCrossEntropyLoss(nn.Module):
             self.tail_bias = nn.Parameter(torch.zeros(self.nsplits - 1))
 
     def logprob(self, weight, bias, hiddens, splits=None, softmaxed_head_res=None, verbose=False):
-        # If not provided softmaxed_head_res, we need to caculate it.
+        # If not provided with softmaxed_head_res, we need to caculate it.
         if softmaxed_head_res is None:
             start, end = self.splits[0], self.splits[1]
             head_weight = None if end - start == 0 else weight[start:end]
@@ -117,16 +116,11 @@ class SplitCrossEntropyLoss(nn.Module):
             tmp_mask = mask == idx
             split_targets.append(targets.masked_select(tmp_mask))
             split_hiddens.append(hiddens.masked_select(tmp_mask.unsqueeze(1).
-                                      expand_as(hiddens)).view(-1, self.hidden_size))
+                                                       expand_as(hiddens)).view(-1, self.hidden_size))
             processed_length += len(split_targets[-1])
         return split_targets, split_hiddens
 
     def forward(self, weight, bias, hiddens, targets, verbose=False):
-        if self.verbose or verbose:
-            for idx in sorted(self.stats):
-                print('{}: {}'.format(idx, int(np.mean(self.stats[idx]))), end=', ')
-            print()
-
         total_loss = None
         if len(hiddens.size()) > 2:
             hiddens = hiddens.view(-1, hiddens.size(2))
@@ -148,8 +142,6 @@ class SplitCrossEntropyLoss(nn.Module):
         combo = torch.cat([split_hiddens[i] for i in range(self.nsplits) if len(split_hiddens[i])])
         all_head_res = torch.nn.functional.linear(combo, head_weight, bias=head_bias)
         softmaxed_all_head_res = torch.nn.functional.log_softmax(all_head_res, dim=-1)
-        if self.verbose or verbose:
-            self.stats[0].append((combo.size()[0], head_weight.size()[0]))
 
         running_offset = 0
         for idx in range(self.nsplits):
@@ -166,11 +158,6 @@ class SplitCrossEntropyLoss(nn.Module):
             else:
                 softmaxed_head_res = softmaxed_all_head_res[running_offset:running_offset + len(split_hiddens[idx])]
 
-                if self.verbose or verbose:
-                    start, end = self.splits[idx], self.splits[idx + 1]
-                    tail_weight = weight[start:end]
-                    self.stats[idx].append((split_hiddens[idx].size()[0], tail_weight.size()[0]))
-
                 # Calculate the softmax for the words and p(tombstone)*p(words in tombstone)
                 tail_res = self.logprob(weight, bias, split_hiddens[idx], splits=[idx],
                                         softmaxed_head_res=softmaxed_head_res)
@@ -178,13 +165,11 @@ class SplitCrossEntropyLoss(nn.Module):
                 # All indices are shifted - if the first split handles [0,...,499] 
                 # then the 500th in the second split will be 0 indexed
                 indices = (split_targets[idx] - self.splits[idx]).view(-1, 1)
-                # Warning: if you don't squeeze, you get an N x 1 return, which acts oddly with broadcasting
-                entropy = -torch.gather(tail_res, dim=1, index=indices).squeeze()
-            ###
+                entropy = -torch.gather(tail_res, dim=1, index=indices)
             running_offset += len(split_hiddens[idx])
             total_loss = entropy.float().sum() if total_loss is None else total_loss + entropy.float().sum()
 
-        return (total_loss / len(targets)).type_as(weight)
+        return total_loss / len(targets)
 
 
 if __name__ == '__main__':
@@ -203,16 +188,18 @@ if __name__ == '__main__':
     bias = torch.nn.Parameter(torch.ones(V))
     optimizer = torch.optim.SGD(list(embed.parameters()) + list(crit.parameters()), lr=1)
 
+    x = torch.autograd.Variable((torch.rand(N, 1) * 0.999 * V).int().long())
+    prev = torch.autograd.Variable((torch.rand(N, 1) * 0.999 * V).int().long())
+    print('X:', x)
+    print('Previous:', prev)
     for _ in range(E):
-        prev = torch.autograd.Variable((torch.rand(N, 1) * 0.999 * V).int().long())
-        x = torch.autograd.Variable((torch.rand(N, 1) * 0.999 * V).int().long())
         y = embed(prev).squeeze()
         c = crit(embed.weight, bias, y, x.view(N))
-        print('Crit', c.exp().data.item())
+        print('Crit:', c.exp().data.item())
 
-        logprobs = crit.logprob(embed.weight, bias, y[:2]).exp()
-        print(logprobs)
-        print(logprobs.sum(dim=1))
+        probs = crit.logprob(embed.weight, bias, y[:2]).exp()
+        print(probs)
+        print(probs.sum(dim=1))
 
         optimizer.zero_grad()
         c.backward()
