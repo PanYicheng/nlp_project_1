@@ -1,6 +1,5 @@
 import os
 import torch
-
 from collections import Counter
 
 
@@ -32,12 +31,13 @@ class Corpus(object):
         self.test = self.tokenize(os.path.join(path, 'test.txt'))
 
     def tokenize(self, path):
-        """Tokenizes a text file."""
+        """Tokenize a text file."""
         assert os.path.exists(path)
         # Add words to the dictionary
         with open(path, 'r') as f:
             tokens = 0
             for line in f:
+                # append <eos> to every sample sequence
                 words = line.split() + ['<eos>']
                 tokens += len(words)
                 for word in words:
@@ -48,6 +48,7 @@ class Corpus(object):
             ids = torch.LongTensor(tokens)
             token = 0
             for line in f:
+                # append <eos> to every sample sequence
                 words = line.split() + ['<eos>']
                 for word in words:
                     ids[token] = self.dictionary.word2idx[word]
