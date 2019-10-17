@@ -1,6 +1,11 @@
+"""
+Dropout for the embedding layer
+It means that for every word of input has a possibility of p
+to be embedded to all 0 vectors. It is just like erasing this word.
+"""
 import numpy as np
-
 import torch
+
 
 def embedded_dropout(embed, words, dropout=0.1, scale=None):
   if dropout:
@@ -29,11 +34,13 @@ if __name__ == '__main__':
 
   embed = torch.nn.Embedding(V, h)
 
-  words = np.random.random_integers(low=0, high=V-1, size=(batch_size, bptt))
+  words = np.random.randint(low=0, high=V, size=(batch_size, bptt))
   words = torch.LongTensor(words)
 
   origX = embed(words)
   X = embedded_dropout(embed, words)
+  X_normaldropout = torch.nn.functional.dropout(origX, p=0.1)
 
   print(origX)
   print(X)
+  print(X_normaldropout)

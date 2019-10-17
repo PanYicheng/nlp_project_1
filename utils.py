@@ -22,8 +22,12 @@ def batchify(data, bsz, args):
     return data
 
 
-def get_batch(source, i, args, seq_len=None, evaluation=False):
+def get_batch(source, i, args, seq_len=None):
     seq_len = min(seq_len if seq_len else args.bptt, len(source) - 1 - i)
     data = source[i:i+seq_len]
     target = source[i+1:i+1+seq_len].view(-1)
     return data, target
+
+
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)

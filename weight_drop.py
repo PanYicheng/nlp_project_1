@@ -1,6 +1,9 @@
+"""
+Weight drop for hidden to hidden matrix in RNN models
+TODO: need to reimplement in torch 1.3.0, bugs exist. Not used now.
+"""
 import torch
 from torch.nn import Parameter
-from functools import wraps
 
 
 class WeightDrop(torch.nn.Module):
@@ -17,6 +20,7 @@ class WeightDrop(torch.nn.Module):
         # It must be a function rather than a lambda as otherwise pickling explodes
         # We can't write boring code though, so ... WIDGET DEMAGNETIZER Y2K EDITION!
         # (╯°□°）╯︵ ┻━┻
+        # print('y2k')
         return
 
     def _setup(self):
@@ -27,8 +31,9 @@ class WeightDrop(torch.nn.Module):
         for name_w in self.weights:
             print('Applying weight drop of {} to {}'.format(self.dropout, name_w))
             w = getattr(self.module, name_w)
-            del self.module._parameters[name_w]
-            self.module.register_parameter(name_w + '_raw', Parameter(w.data))
+            # Delete original weight
+            delattr(self.module, name_w)
+            self.module.register_parameter(name_w + '_raw', Parameter(w))
 
     def _setweights(self):
         for name_w in self.weights:
@@ -51,9 +56,6 @@ class WeightDrop(torch.nn.Module):
 
 
 if __name__ == '__main__':
-    import torch
-    from weight_drop import WeightDrop
-
     # Input is (seq, batch, input)
     x = torch.autograd.Variable(torch.randn(2, 1, 10))
     x = x.cuda()
@@ -70,8 +72,8 @@ if __name__ == '__main__':
 
     lin = WeightDrop(torch.nn.Linear(10, 10), ['weight'], dropout=0.9)
     lin.cuda()
-    run1 = [x.sum() for x in lin(x).data]
-    run2 = [x.sum() for x in lin(x).data]
+    run1 = [x.sum() for x in lin(x)]
+    run2 = [x.sum() for x in lin(x)]
 
     print('All items should be different')
     print('Run 1:', run1)

@@ -97,7 +97,7 @@ class SplitCrossEntropyLoss(nn.Module):
         for idx in range(1, self.nsplits):
             # for each split lower bound except  0, add 1 if equal or greater
             partial_mask = targets >= self.splits[idx]
-            mask = mask + partial_mask if mask is not None else partial_mask
+            mask = mask + partial_mask.int() if mask is not None else partial_mask.int()
         # Split according to the mask
         processed_length = 0
         for idx in range(self.nsplits):
