@@ -26,7 +26,7 @@ class RNNModel(nn.Module):
                                    save_prev_x=True, zoneout=0, window=2 if l == 0 else 1, output_gate=True) for l in
                          range(nlayers)]
         print(self.rnns)
-        self.decoder = nn.Linear(nhid, ntoken)
+
 
         # Optionally tie weights as in:
         # "Using the Output Embedding to Improve Language Models" (Press & Wolf 2016)
@@ -37,7 +37,10 @@ class RNNModel(nn.Module):
         if tie_weights:
             if nhid != emsize:
                 raise ValueError('When using the tied flag, nhid must be equal to emsize')
+            self.decoder = nn.Linear(nhid, ntoken, bias=False)
             self.decoder.weight = self.encoder.weight
+        else:
+            self.decoder = nn.Linear(nhid, ntoken)
 
         self.init_weights()
 
