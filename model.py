@@ -42,8 +42,6 @@ class RNNModel(nn.Module):
         else:
             self.decoder = nn.Linear(nhid, ntoken)
 
-        self.init_weights()
-
         self.ninp = emsize
         self.nhid = nhid
         self.nlayers = nlayers
@@ -51,6 +49,8 @@ class RNNModel(nn.Module):
         self.dropouti = dropouti
         self.dropout = dropout
         self.tie_weights = tie_weights
+
+        self.init_weights()
 
     def reset(self):
         if self.rnn_type == 'QRNN':
