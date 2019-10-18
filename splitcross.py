@@ -31,7 +31,7 @@ class SplitCrossEntropyLoss(nn.Module):
         if softmaxed_head_res is None:
             start, end = self.splits[0], self.splits[1]
             head_weight = None if end - start == 0 else weight[start:end]
-            head_bias = None if end - start == 0 else bias[start:end]
+            head_bias = None if (end - start == 0 or not bias) else bias[start:end]
             # We only add the tombstones if we have more than one split
             if self.nsplits > 1:
                 head_weight = self.tail_vectors if head_weight is None else torch.cat([head_weight, self.tail_vectors])
@@ -130,7 +130,7 @@ class SplitCrossEntropyLoss(nn.Module):
         # First we perform the first softmax on the head vocabulary and the tombstones
         start, end = self.splits[0], self.splits[1]
         head_weight = None if end - start == 0 else weight[start:end]
-        head_bias = None if end - start == 0 else bias[start:end]
+        head_bias = None if (end - start == 0 or not bias) else bias[start:end]
 
         # We only add the tombstones if we have more than one split
         if self.nsplits > 1:
