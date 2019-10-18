@@ -151,7 +151,8 @@ if not criterion:
     elif ntokens > 20000:
         splits = [5000, 20000]
     print('Using', splits)
-    criterion = SplitCrossEntropyLoss(args.nhid, splits=splits, verbose=False)
+    criterion = SplitCrossEntropyLoss(args.nhid, splits=splits,
+                                      tied_weights=args.tied, verbose=False)
 ###
 if args.cuda:
     model = model.cuda()

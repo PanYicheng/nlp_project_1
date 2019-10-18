@@ -10,7 +10,7 @@ import numpy as np
 
 class SplitCrossEntropyLoss(nn.Module):
     r"""SplitCrossEntropyLoss calculates an approximate softmax"""
-    def __init__(self, hidden_size, splits, verbose=False):
+    def __init__(self, hidden_size, splits, tied_weights=False, verbose=False):
         # We assume splits is [0, split1, split2, N] where N >= TokenNum
         # For example, a vocab of 1000 words may have splits [0] + [100, 500] + [inf]
         super(SplitCrossEntropyLoss, self).__init__()
@@ -24,7 +24,10 @@ class SplitCrossEntropyLoss(nn.Module):
         # The probability given to this tombstone is the probability of selecting an item from the represented split
         if self.nsplits > 1:
             self.tail_vectors = nn.Parameter(torch.zeros(self.nsplits - 1, hidden_size))
-            self.tail_bias = nn.Parameter(torch.zeros(self.nsplits - 1))
+            if not tied_weights:
+                self.tail_bias = nn.Parameter(torch.zeros(self.nsplits - 1))
+            else:
+                self.tail_bias = None
 
     def logprob(self, weight, bias, hiddens, splits=None, softmaxed_head_res=None, verbose=False):
         # If not provided with softmaxed_head_res, we need to caculate it.
@@ -57,7 +60,7 @@ class SplitCrossEntropyLoss(nn.Module):
             else:
                 start, end = self.splits[idx], self.splits[idx + 1]
                 tail_weight = weight[start:end]
-                tail_bias = bias[start:end]
+                tail_bias = None if not bias else bias[start:end]
 
                 # Calculate the softmax for the words in the tombstone
                 tail_res = torch.nn.functional.linear(hiddens, tail_weight, bias=tail_bias)
