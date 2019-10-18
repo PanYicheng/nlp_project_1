@@ -59,8 +59,9 @@ class RNNModel(nn.Module):
     def init_weights(self):
         initrange = 0.1
         self.encoder.weight.data.uniform_(-initrange, initrange)
-        self.decoder.bias.data.fill_(0)
-        self.decoder.weight.data.uniform_(-initrange, initrange)
+        if not self.tie_weights:
+            self.decoder.bias.data.fill_(0)
+            self.decoder.weight.data.uniform_(-initrange, initrange)
 
     def forward(self, input, hidden):
         emb = embedded_dropout(self.encoder, input, dropout=self.dropoute if self.training else 0)
