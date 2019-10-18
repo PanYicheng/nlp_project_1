@@ -41,6 +41,8 @@ parser.add_argument('--dropoute', type=float, default=0.1,
                     help='dropout to remove words from embedding layer (0 = no dropout)')
 parser.add_argument('--dropoutrnn', type=float, default=0.1,
                     help='amount of weight dropout to apply between RNN layers')
+parser.add_argument('--tied', action='store_true',
+                    help='tie projection matrix with embedding matrix')
 parser.add_argument('--seed', type=int, default=42,
                     help='random seed')
 parser.add_argument('--nonmono', type=int, default=5,
@@ -67,7 +69,6 @@ parser.add_argument('--optimizer', type=str,  default='sgd',
 parser.add_argument('--when', nargs="+", type=int, default=[-1],
                     help='When (which epochs) to divide the learning rate by 10 - accepts multiple')
 args = parser.parse_args()
-args.tied = False
 
 # Set the random seed manually for reproducibility.
 np.random.seed(args.seed)
