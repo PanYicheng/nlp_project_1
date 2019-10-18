@@ -1,5 +1,5 @@
 """
-This file generates new sentences sampled from the language model
+This code generates new sentences sampled from the language model
 """
 import argparse
 import hashlib
@@ -11,7 +11,7 @@ import data
 parser = argparse.ArgumentParser(description='PyTorch  Language Model')
 
 # Model parameters.
-parser.add_argument('--data', type=str, default='./data/rocstory_data',
+parser.add_argument('--data', type=str, default='./rocstory_data/',
                     help='location of the data corpus')
 parser.add_argument('--conditional_data', type=str, default='',
                     help='location of the file that contains the content that '
@@ -21,7 +21,7 @@ parser.add_argument('--print_cond_data', action='store_true',
                          'generated text is conditioned')
 parser.add_argument('--checkpoint', type=str, default='./model.pt',
                     help='model checkpoint to use')
-parser.add_argument('--outf', type=str, default='generated.txt',
+parser.add_argument('--outf', type=str, default='',
                     help='output file for generated text')
 parser.add_argument('--nsents', type=int, default=1000,
                     help='number of lines to generate')
@@ -31,11 +31,13 @@ parser.add_argument('--seed', type=int, default=42,
                     help='random seed')
 parser.add_argument('--cuda', action='store_true',
                     help='use CUDA')
-parser.add_argument('--temperature', type=float, default=1.0,
+parser.add_argument('--temperature', type=float, default=0.5,
                     help='temperature - higher will increase diversity')
 parser.add_argument('--log-interval', type=int, default=100,
                     help='reporting interval')
 args = parser.parse_args()
+if len(args.outf) == 0:
+    args.outf = args.conditional_data + '.generateoutput'
 
 # Set the random seed manually for reproducibility.
 torch.manual_seed(args.seed)
@@ -48,11 +50,10 @@ if torch.cuda.is_available():
 if args.temperature < 1e-3:
     parser.error("--temperature has to be greater or equal 1e-3")
 
+print('Loading model ...')
 with open(args.checkpoint, 'rb') as f:
     model, criterion, optimizer = torch.load(f)
 model.eval()
-if args.model == 'QRNN':
-    model.reset()
 
 if args.cuda:
     model.cuda()
@@ -64,9 +65,11 @@ if os.path.exists(fn):
     print('Loading cached dataset...')
     corpus = torch.load(fn)
 else:
+    print('Producing dataset...')
     corpus = data.Corpus(args.data)
+    torch.save(corpus, fn)
 ntokens = len(corpus.dictionary)
-eos_id = corpus.dictionary.word2idx('<eos>')
+eos_id = corpus.dictionary.word2idx['<eos>']
 hidden = model.init_hidden(1)
 input = torch.rand(1, 1).mul(ntokens).long()
 if args.cuda:
@@ -77,23 +80,30 @@ with open(args.outf, 'w') as outf:
     for nsent in range(args.nsents):
         try:
             # the only thing that breaks the while loop is if there are no more eos_ids
-            idx = cond_data.index(eos_id)
+            idx = (cond_data == eos_id).nonzero()[0][0]
         except:
             break
         cond_length = idx
+        hidden = model.init_hidden(1)
         for i in range(args.words):
             if i < cond_length:
                 word_idx = cond_data[i]
-            input.data.fill_(word_idx)
-            output, hidden = model(input, hidden)
-            output = model.decode(output)
-            word_weights = output.squeeze().data.div(args.temperature).exp().cpu()
-            word_idx = torch.multinomial(word_weights, 1)[0]
-            word = corpus.dictionary.idx2word[word_idx]
-            if word_idx == eos_id:
-                outf.write('\n')
-                break
-            outf.write(word)
+                input.data.fill_(word_idx)
+                output, hidden = model(input, hidden)
+                output = model.decoder(output)
+                if args.print_cond_data:
+                    outf.write(corpus.dictionary.idx2word[word_idx] + ' ')
+            else:
+                word_weights = output.squeeze().data.div(args.temperature).exp().cpu()
+                word_idx = torch.multinomial(word_weights, 1)[0]
+                word = corpus.dictionary.idx2word[word_idx]
+                if word_idx == eos_id:
+                    outf.write('\n')
+                    break
+                outf.write(word+' ')
+                input.data.fill_(word_idx)
+                output, hidden = model(input, hidden)
+                output = model.decoder(output)
         cond_data = cond_data[idx+1:]
         if nsent % args.log_interval == 0:
             print('Generated {}/{} words'.format(nsent, args.nsents))
