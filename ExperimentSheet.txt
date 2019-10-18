@@ -1,0 +1,43 @@
+1. gpu4 server: nlp1models/model_story.pt
+    --train-data rocstory_plan_write/train.txt \
+    --valid-data rocstory_plan_write/valid.txt \
+    --test-data rocstory_plan_write/test.txt \
+    --batch_size 100 \
+    --dropout 0.4 --dropoute 0.1 --wdrop 0.5 --nonmono 5 \
+    --alpha 2 --beta 1 --wdecay 1.2e-6 --tied --optimizer sgd \
+    --dropouti 0.4 --dropouth 0.25 --seed 141 --epoch 500 --emsize 800 --nhid 800 \
+    --model GRU --lr 10 --when 300 400 --nlayers 3 --clip 0.25 --bptt 70 \
+    --save ./nlp1models/model_story.pt --vocab-file ./nlp1models/vocab_story.pkl \
+    --cuda
+
+
+2. gpu4 server: rocstorymodels/model_story.pt
+    --train-data rocstory_plan_write/ROCStories_all_merge_tokenize.titlesepkeysepstory.train \
+    --valid-data rocstory_plan_write/ROCStories_all_merge_tokenize.titlesepkeysepstory.dev \
+    --test-data rocstory_plan_write/ROCStories_all_merge_tokenize.titlesepkeysepstory.test \
+    --batch_size 100 \
+    --dropout 0.4 --dropoute 0.1 --wdrop 0.5 --nonmono 5 \
+    --alpha 2 --beta 1 --wdecay 1.2e-6 --tied --optimizer sgd \
+    --dropouti 0.4 --dropouth 0.25 --seed 141 --epoch 500 --emsize 800 --nhid 800 \
+    --model GRU --lr 10 --when 300 400 --nlayers 3 --clip 0.25 --bptt 70 \
+    --save ./rocstorymodels/model_story.pt --vocab-file ./rocstorymodels/vocab_story.pkl \
+    --cuda
+
+3. gpu10 server : storymodels/model.pt
+    --data ./rocstory_data/ --save ./storymodels/model.pt \
+    --model GRU --emsize 800 --nhid 800 --nlayers 3 \
+    --lr 10 --clip 0.25 --epochs 500 --batch_size 80 --bptt 70 \
+    --alpha 0.1 \
+    --dropoute 0.1 --dropouti 0.1 --dropout 0.1 --dropoutrnn 0.1 \
+    --seed 42 --nonmono 5 --cuda --log-interval 200 \
+    --when 300 400
+
+
+4. gpu10 server : storymodels/model_tied.pt
+    --data ./rocstory_data/ --save ./storymodels/model_tied.pt \
+    --model GRU --emsize 800 --nhid 800 --nlayers 3 --tied \
+    --lr 10 --clip 0.25 --epochs 500 --batch_size 200 --bptt 70 \
+    --alpha 0.1 \
+    --dropoute 0.1 --dropouti 0.1 --dropout 0.1 --dropoutrnn 0.1 \
+    --seed 42 --nonmono 5 --cuda --log-interval 200 \
+    --when 300 400
