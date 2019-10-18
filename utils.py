@@ -1,4 +1,5 @@
 import torch
+import os
 
 
 def repackage_hidden(h):
@@ -31,3 +32,24 @@ def get_batch(source, i, args, seq_len=None):
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+def log_loss(filename, loss_value, first=True):
+    dirname = os.path.dirname(filename)
+    if len(dirname) != 0 and not os.path.exists(dirname):
+        os.makedirs(dirname)
+    if first:
+        torch.save([float(loss_value)], filename)
+    else:
+        loss_list = torch.load(filename)
+        loss_list.append(float(loss_value))
+        torch.save(loss_list, filename)
+
+
+if __name__ == '__main__':
+    print('{:-^60}'.format('log_loss test'))
+    for i in range(100):
+        log_loss('test.pkl', float(i), i == 0)
+    loss_list = torch.load('test.pkl')
+    print(loss_list)
+    os.remove('test.pkl')

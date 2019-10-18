@@ -9,6 +9,7 @@ import hashlib
 import data
 import model
 from utils import *
+from splitcross import SplitCrossEntropyLoss
 
 parser = argparse.ArgumentParser(description='PyTorch RNN/LSTM Language Model')
 parser.add_argument('--data', type=str, default='./rocstory_data/',
@@ -95,6 +96,7 @@ def model_load(fn):
             model, criterion, optimizer = torch.load(f)
     else:
         print('Error! Cannot load model from file {}'.format(fn))
+        exit(1)
 
 
 fn = 'corpus.{}.data'.format(hashlib.md5(args.data.encode()).hexdigest())
@@ -115,7 +117,6 @@ test_data = batchify(corpus.test, test_batch_size, args)
 ###############################################################################
 # Build the model
 ###############################################################################
-from splitcross import SplitCrossEntropyLoss
 criterion = None
 
 model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers,
@@ -187,8 +188,8 @@ def train():
     model.train()
     total_loss = 0
     hidden = model.init_hidden(args.batch_size)
+    start_time = time.time()
     for batch, i in enumerate(range(0, train_data.size(0) - 1, args.bptt)):
-        start_time = time.time()
         data, targets = get_batch(train_data, i, args)
 
         # Starting each batch, we detach the hidden state from how it was previously produced.
@@ -199,8 +200,8 @@ def train():
         output, hidden = model(data, hidden)
         loss = criterion(model.decoder.weight, model.decoder.bias, output, targets)
         # Activiation Regularization
-        if args.alpha:
-            loss = loss + args.alpha * output.pow(2).mean()
+        # if args.alpha:
+        #     loss = loss + args.alpha * output.pow(2).mean()
         # TODO: emporal Activation Regularization (slowness)
         # if args.beta:
         #     loss = loss + sum(args.beta * (rnn_h[1:] - rnn_h[:-1]).pow(2).mean() for rnn_h in rnn_hs[-1:])
@@ -213,8 +214,10 @@ def train():
 
         total_loss += loss.data.item()
         if batch % args.log_interval == 0 and batch > 0:
-            cur_loss = total_loss / args.log_interval
             elapsed = time.time() - start_time
+            cur_loss = total_loss / args.log_interval
+            log_loss('loss_log.pkl', cur_loss, batch==args.log_interval)
+            start_time = time.time()
             print('| epoch {:3d} | {:5d}/{:5d} batches | lr {:05.5f} | {:5.2f} ms/batch  | '
                     'loss {:5.2f} | ppl {:8.2f} | bpc {:8.3f}'.format(
                 epoch, batch, len(train_data) // args.bptt, optimizer.param_groups[0]['lr'],
