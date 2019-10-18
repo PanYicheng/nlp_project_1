@@ -242,51 +242,16 @@ try:
         epoch_start_time = time.time()
         train()
         if 't0' in optimizer.param_groups[0]:
-            tmp = {}
-            for name, prm in model.named_parameters():
-                if prm in tmp:
-                    print('Error! The tmp dict key should not exist before saving')
-                    exit(1)
-                tmp[prm] = prm.data.clone()
-                try:
-                    prm.data = optimizer.state[prm]['ax'].clone()
-                except KeyError as e:
-                    print('Parameter %s didnot exist', name)
-                    print('\n\nASGD optimizer state: ')
-                    for k in optimizer.state:
-                        print('---', k.size())
-                    exit(1)
-            for name, prm in criterion.named_parameters():
-                if prm in tmp:
-                    print('Error! The tmp dict key should not exist before saving')
-                    exit(1)
-                tmp[prm] = prm.data.clone()
-                try:
-                    prm.data = optimizer.state[prm]['ax'].clone()
-                except KeyError as e:
-                    print('Parameter %s didnot exist', name)
-                    print('\n\nASGD optimizer state: ')
-                    for k in optimizer.state:
-                        print('---', k.size())
-                    exit(1)
-
             val_loss = evaluate(val_data, eval_batch_size)
             print('-' * 89)
             print('| end of epoch {:3d} | time: {:5.2f}s | valid loss {:5.2f} | '
                 'valid ppl {:8.2f} | valid bpc {:8.3f}'.format(
                     epoch, (time.time() - epoch_start_time), val_loss, math.exp(val_loss), val_loss / math.log(2)))
             print('-' * 89)
-
             if val_loss < stored_loss:
                 model_save(args.save)
                 print('Saving model (new best validation)!')
                 stored_loss = val_loss
-
-            for prm in model.parameters():
-                prm.data = tmp[prm].clone()
-            for prm in criterion.parameters():
-                prm.data = tmp[prm].clone()
-
         else:
             val_loss = evaluate(val_data, eval_batch_size)
             print('-' * 89)
