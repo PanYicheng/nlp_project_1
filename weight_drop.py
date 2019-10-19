@@ -7,11 +7,13 @@ TODO: need to reimplement in torch 1.3.0, bugs exist. Not used now.
 import torch
 from torch.nn import Parameter
 import warnings
+
 warnings.filterwarnings("ignore")
 
 
 class WeightDrop(torch.nn.Module):
-    def __init__(self, module, weights, dropout=0, variational=False):
+    def __init__(self, module, weights, dropout: float = 0,
+                 variational=False):
         super(WeightDrop, self).__init__()
         self.module = module
         self.weights = weights
@@ -44,7 +46,7 @@ class WeightDrop(torch.nn.Module):
             raw_w = getattr(self.module, name_w + '_raw')
             w = None
             if self.variational:
-                mask = torch.autograd.Variable(torch.ones(raw_w.size(0), 1))
+                mask = torch.ones(raw_w.size(0), 1, requires_grad=True)
                 if raw_w.is_cuda:
                     mask = mask.cuda()
                 mask = torch.nn.functional.dropout(mask, p=self.dropout, training=True)
@@ -61,8 +63,11 @@ class WeightDrop(torch.nn.Module):
 
 if __name__ == '__main__':
     # Input is (seq, batch, input)
-    x = torch.autograd.Variable(torch.randn(2, 1, 10))
+    x = torch.randn(8, 3, 10)
     x = x.cuda()
+    target = torch.randint(0, 5, size=[x.size(0) * x.size(1)])
+    print('target:\n', target)
+    target = target.cuda()
     h0 = None
 
     ###
@@ -95,8 +100,7 @@ if __name__ == '__main__':
     wdrnn = WeightDrop(torch.nn.LSTM(10, 10), ['weight_hh_l0'], dropout=0.9)
     # wdrnn = torch.nn.LSTM(10, 10)
     wdrnn.cuda()
-    # wdrnn.module.flatten_parameters()
-
+    wdrnn.module.flatten_parameters()
 
     run1 = [x.sum() for x in wdrnn(x, h0)[0].data]
     run2 = [x.sum() for x in wdrnn(x, h0)[0].data]
@@ -105,9 +109,32 @@ if __name__ == '__main__':
     print('Run 1:', run1)
     print('Run 2:', run2)
 
-    # First time step, not influenced by hidden to hidden weights, should be equal
-    # assert run1[0] == run2[0]
+    # First time step, not influenced by hidden to hidden weights, should be
+    # equal
+    assert run1[0] == run2[0]
     # Second step should not
-    # assert run1[1] != run2[1]
-
+    assert run1[1] != run2[1]
     print('---')
+
+    print('Testing autograd of WeightDrop multilayer LSTM')
+    wdrnn = WeightDrop(torch.nn.LSTM(10, 5, 2),
+                       ['weight_hh_l{}'.format(i) for i in range(2)],
+                       dropout=0.9)
+    wdrnn.cuda()
+    optimizer = torch.optim.SGD(wdrnn.parameters(), lr=1)
+    criterion = torch.nn.CrossEntropyLoss(reduction='sum').cuda()
+
+    for epoch in range(10):
+        y, (h_n, c_n) = wdrnn(x)
+        y = y.view(-1, y.size(2))
+        loss = criterion(y, target)
+        print('Loss: {:5.5f}'.format(loss))
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+    wdrnn.eval()
+    y, (h_n, c_n) = wdrnn(x)
+    y = y.view(-1, y.size(2))
+    loss = criterion(y, target)
+    print('Loss after:{:5.5f}'.format(loss))

@@ -3,6 +3,7 @@ import torch.nn as nn
 
 from embed_regularize import embedded_dropout
 from locked_dropout import LockedDropout
+from weight_drop import WeightDrop
 
 
 class RNNModel(nn.Module):
@@ -10,6 +11,7 @@ class RNNModel(nn.Module):
 
     def __init__(self, rnn_type, ntoken, emsize, nhid, nlayers,
                  dropoute=0.2, dropouti=0.2, dropoutrnn=0.2, dropout=0.2,
+                 wdrop=0.5,
                  tie_weights=False):
         super(RNNModel, self).__init__()
         self.lockdrop = LockedDropout()
@@ -25,8 +27,10 @@ class RNNModel(nn.Module):
                                    hidden_size=nhid if l != nlayers - 1 else (emsize if tie_weights else nhid),
                                    save_prev_x=True, zoneout=0, window=2 if l == 0 else 1, output_gate=True) for l in
                          range(nlayers)]
+        if wdrop:
+            self.rnns = WeightDrop(self.rnns,
+                                   ['weight_hh_l{}'.format(i) for i in range(nlayers)])
         print(self.rnns)
-
 
         # Optionally tie weights as in:
         # "Using the Output Embedding to Improve Language Models" (Press & Wolf 2016)
