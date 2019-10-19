@@ -1,4 +1,9 @@
-1. gpu4 server: nlp1models/model_story.pt
+Update time: 13:23,Oct 19,2019
+1. gpu4 server: nlp1models/model_story.pt epoch@325
+
+	| valid loss  3.22 | valid ppl    25.08 | valid bpc    4.648
+	| train loss  3.20 | train ppl    24.50 | train bpc    4.614
+
     --train-data rocstory_plan_write/train.txt \
     --valid-data rocstory_plan_write/valid.txt \
     --test-data rocstory_plan_write/test.txt \
@@ -11,7 +16,11 @@
     --cuda
 
 
-2. gpu4 server: rocstorymodels/model_story.pt
+2. gpu4 server: rocstorymodels/model_story.pt epoch@338
+
+	| valid loss  3.29 | valid ppl    26.85 | valid bpc    4.747
+	| train loss  3.19 | train ppl    24.25 | train bpc    4.600
+
     --train-data rocstory_plan_write/ROCStories_all_merge_tokenize.titlesepkeysepstory.train \
     --valid-data rocstory_plan_write/ROCStories_all_merge_tokenize.titlesepkeysepstory.dev \
     --test-data rocstory_plan_write/ROCStories_all_merge_tokenize.titlesepkeysepstory.test \
@@ -24,6 +33,11 @@
     --cuda
 
 3. gpu10 server : storymodels/model.pt
+
+	| test loss  3.41 | test ppl    30.21 | test bpc    4.917
+	| valid loss  4.13 | valid ppl    62.38 | valid bpc    5.963
+	| train loss  1.84 | train ppl     6.27 | train bpc    2.648
+
     --data ./rocstory_data/ --save ./storymodels/model.pt \
     --model GRU --emsize 800 --nhid 800 --nlayers 3 \
     --lr 10 --clip 0.25 --epochs 500 --batch_size 80 --bptt 70 \
@@ -33,7 +47,10 @@
     --when 300 400
 
 
-4. gpu10 server : storymodels/model_tied.pt
+4. gpu10 server : storymodels/model_tied.pt 
+	| test loss  3.32 | test ppl    27.74   | test  bpc    4.794 
+	| valid loss  3.89 | valid ppl    48.83 | valid bpc    5.610
+	| train loss  2.10 | train ppl     8.16 | train bpc    3.028
     --data ./rocstory_data/ --save ./storymodels/model_tied.pt \
     --model GRU --emsize 800 --nhid 800 --nlayers 3 --tied \
     --lr 10 --clip 0.25 --epochs 500 --batch_size 200 --bptt 70 \
