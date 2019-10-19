@@ -29,7 +29,8 @@ class RNNModel(nn.Module):
                          range(nlayers)]
         if wdrop:
             self.rnns = WeightDrop(self.rnns,
-                                   ['weight_hh_l{}'.format(i) for i in range(nlayers)])
+                                   ['weight_hh_l{}'.format(i) for i in range(nlayers)],
+                                   wdrop)
         print(self.rnns)
 
         # Optionally tie weights as in:

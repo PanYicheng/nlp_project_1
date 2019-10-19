@@ -285,7 +285,6 @@ try:
                     and (len(best_val_loss) > args.nonmono) \
                     and (val_loss > min(best_val_loss[-args.nonmono:])):
                 print('Switching to ASGD')
-                print('Model all parameters:')
                 optimizer = torch.optim.ASGD(params, lr=args.lr, t0=0, lambd=0., weight_decay=args.wdecay)
 
         if epoch in args.when:
