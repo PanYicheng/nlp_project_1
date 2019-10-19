@@ -275,13 +275,13 @@ try:
                 print('Model all parameters:')
                 optimizer = torch.optim.ASGD(params, lr=args.lr, t0=0, lambd=0., weight_decay=args.wdecay)
 
-            if epoch in args.when:
-                print('Saving model before learning rate decreased')
-                model_save('{}.e{}'.format(args.save, epoch))
-                print('Dividing learning rate by 10')
-                optimizer.param_groups[0]['lr'] /= 10.
+        if epoch in args.when:
+            print('Saving model before learning rate decreased')
+            model_save('{}.e{}'.format(args.save, epoch))
+            print('Dividing learning rate by 10')
+            optimizer.param_groups[0]['lr'] /= 10.
 
-            best_val_loss.append(val_loss)
+        best_val_loss.append(val_loss)
 
 except KeyboardInterrupt:
     print('{:-^60}'.format(''))
