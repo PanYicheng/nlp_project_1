@@ -33,11 +33,9 @@ Update time: 13:23,Oct 19,2019
     --cuda
 
 3. gpu10 server : storymodels/model.pt
-
 	| test loss  3.41 | test ppl    30.21 | test bpc    4.917
 	| valid loss  4.13 | valid ppl    62.38 | valid bpc    5.963
 	| train loss  1.84 | train ppl     6.27 | train bpc    2.648
-
     --data ./rocstory_data/ --save ./storymodels/model.pt \
     --model GRU --emsize 800 --nhid 800 --nlayers 3 \
     --lr 10 --clip 0.25 --epochs 500 --batch_size 80 --bptt 70 \
@@ -61,7 +59,9 @@ Update time: 13:23,Oct 19,2019
 
 
 4. gpu10 server : storymodels/model_tied_v1.pt 
-	
+	| test loss  3.30 | test ppl    27.22  | test  bpc    4.767 
+	| valid loss  3.39 | valid ppl    29.67 | valid bpc    4.891
+	| train loss  4.17 | train ppl     64.93 | train bpc    6.021
     --data ./rocstory_data/ --save ./storymodels/model_tied_v1.pt \
     --model GRU --emsize 800 --nhid 800 --nlayers 3 --tied \
     --lr 10 --clip 0.25 --epochs 500 --batch_size 200 --bptt 70 \
@@ -69,3 +69,16 @@ Update time: 13:23,Oct 19,2019
     --dropoute 0.5 --dropouti 0.5 --dropout 0.5 --dropoutrnn 0.5 \
     --seed 42 --nonmono 5 --cuda --log-interval 200 \
     --when 300 400
+
+
+5. gpu10 server : storymodels/model_tied_v2.pt 
+
+
+
+    --data ./rocstory_data/ --save ./storymodels/model_tied_v1.pt \
+    --model GRU --emsize 800 --nhid 800 --nlayers 3 --tied \
+    --lr 5 --clip 0.25 --epochs 500 --batch_size 200 --bptt 70 \
+    --alpha 0.1 --wdrop 0.5 \
+    --dropoute 0.5 --dropouti 0.5 --dropout 0.5 --dropoutrnn 0.5 \
+    --seed 42 --nonmono 5 --cuda --log-interval 200 \
+    --when 200 300
