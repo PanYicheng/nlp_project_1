@@ -1,9 +1,8 @@
 Update time: 13:23,Oct 19,2019
 1. gpu4 server: nlp1models/model_story.pt epoch@325
-
-	| valid loss  3.22 | valid ppl    25.08 | valid bpc    4.648
-	| train loss  3.20 | train ppl    24.50 | train bpc    4.614
-
+	| test loss  3.13 | test ppl    22.85 | test bpc    4.514
+	| valid loss  3.23 | valid ppl    25.26 | valid bpc    4.659
+	| train loss  3.16 | train ppl    23.59 | train bpc    4.560
     --train-data rocstory_plan_write/train.txt \
     --valid-data rocstory_plan_write/valid.txt \
     --test-data rocstory_plan_write/test.txt \
@@ -17,10 +16,9 @@ Update time: 13:23,Oct 19,2019
 
 
 2. gpu4 server: rocstorymodels/model_story.pt epoch@338
-
+	| test loss  3.19 | test ppl    24.30 | test bpc    4.603
 	| valid loss  3.29 | valid ppl    26.85 | valid bpc    4.747
-	| train loss  3.19 | train ppl    24.25 | train bpc    4.600
-
+	| train loss  3.15 | train ppl    23.42 | train bpc    4.550
     --train-data rocstory_plan_write/ROCStories_all_merge_tokenize.titlesepkeysepstory.train \
     --valid-data rocstory_plan_write/ROCStories_all_merge_tokenize.titlesepkeysepstory.dev \
     --test-data rocstory_plan_write/ROCStories_all_merge_tokenize.titlesepkeysepstory.test \
