@@ -90,7 +90,7 @@ Update time: 13:23,Oct 19,2019
     --seed 42 --nonmono 5 --cuda --log-interval 200 \
     --when 200 300
 
-5. gpu10 server : rndmodels/model_key.pt 
+6. gpu10 server : rndmodels/model_key.pt 
 
 
 
@@ -103,7 +103,7 @@ Update time: 13:23,Oct 19,2019
     --when 100 150
 
 
-5. gpu10 server : rndmodels/model_key.pt 
+7. gpu10 server : rndmodels/model_key.pt 
 
 
 
@@ -114,3 +114,14 @@ Update time: 13:23,Oct 19,2019
     --dropoute 0.2 --dropouti 0.2 --dropout 0.2 --dropoutrnn 0.2 \
     --seed 42 --nonmono 5 --cuda --log-interval 200 \
     --when 100 150
+
+
+8. gpu10 server : storymodels/model_tied_alpha.pt 
+	
+    --data ./rocstory_data/ --save ./storymodels/model_tied_v1.pt \
+    --model GRU --emsize 400 --nhid 400 --nlayers 3 --tied \
+    --lr 1 --clip 0.25 --epochs 500 --batch_size 200 --bptt 70 \
+    --alpha 0.001 --wdrop 0.5 \
+    --dropoute 0.5 --dropouti 0.5 --dropout 0.5 --dropoutrnn 0.5 \
+    --seed 42 --nonmono 5 --cuda --log-interval 200 \
+    --when 200 300
