@@ -60,7 +60,7 @@ parser.add_argument('--log-interval', type=int, default=200, metavar='N',
 randomhash = ''.join(str(time.time()).split('.'))
 parser.add_argument('--save', type=str, default=randomhash + '.pt',
                     help='path to save the final model')
-parser.add_argument('--alpha', type=float, default=1,
+parser.add_argument('--alpha', type=float, default=0.001,
                     help='alpha L2 regularization on RNN activation '
                          '(alpha = 0 means no regularization)')
 parser.add_argument('--beta', type=float, default=1,
@@ -213,8 +213,8 @@ def train():
         output, hidden = model(data, hidden)
         loss = criterion(model.decoder.weight, model.decoder.bias, output, targets)
         # Activiation Regularization
-        # if args.alpha:
-        #     loss = loss + args.alpha * output.pow(2).mean()
+        if args.alpha:
+            loss = loss + args.alpha * output.pow(2).mean()
         # TODO: emporal Activation Regularization (slowness)
         # if args.beta:
         #     loss = loss + sum(args.beta * (rnn_h[1:] - rnn_h[:-1]).pow(2).mean() for rnn_h in rnn_hs[-1:])
