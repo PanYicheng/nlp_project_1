@@ -3,6 +3,7 @@ Update time: 13:23,Oct 19,2019
 	| test loss  3.13 | test ppl    22.85 | test bpc    4.514
 	| valid loss  3.23 | valid ppl    25.26 | valid bpc    4.659
 	| train loss  3.16 | train ppl    23.59 | train bpc    4.560
+	Bleu: 0.4074032015745138
     --train-data rocstory_plan_write/train.txt \
     --valid-data rocstory_plan_write/valid.txt \
     --test-data rocstory_plan_write/test.txt \
@@ -60,6 +61,7 @@ Update time: 13:23,Oct 19,2019
 	| test loss  3.30 | test ppl    27.22  | test  bpc    4.767 
 	| valid loss  3.39 | valid ppl    29.67 | valid bpc    4.891
 	| train loss  4.17 | train ppl     64.93 | train bpc    6.021
+	Bleu:0.3908667927478728
     --data ./rocstory_data/ --save ./storymodels/model_tied_v1.pt \
     --model GRU --emsize 800 --nhid 800 --nlayers 3 --tied \
     --lr 10 --clip 0.25 --epochs 500 --batch_size 200 --bptt 70 \
@@ -79,6 +81,7 @@ Update time: 13:23,Oct 19,2019
 	| test loss  3.56 | test ppl    35.28 | test bpc    5.141
 	| valid loss  3.65 | valid ppl    38.37 | valid bpc    5.262
 	| train  loss  4.52 | train ppl    92.29 | train bpc    6.528
+	Bleu:
     --data ./rocstory_data/ --save ./storymodels/model_tied_v1.pt \
     --model GRU --emsize 800 --nhid 800 --nlayers 3 --tied \
     --lr 5 --clip 0.25 --epochs 500 --batch_size 200 --bptt 70 \
