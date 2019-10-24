@@ -1,5 +1,8 @@
 import torch
 import os
+import time
+import math
+import datetime
 
 
 def repackage_hidden(h):
@@ -25,8 +28,8 @@ def batchify(data, bsz, args):
 
 def get_batch(source, i, args, seq_len=None):
     seq_len = min(seq_len if seq_len else args.bptt, len(source) - 1 - i)
-    data = source[i:i+seq_len]
-    target = source[i+1:i+1+seq_len].view(-1)
+    data = source[i:i + seq_len]
+    target = source[i + 1:i + 1 + seq_len].view(-1)
     return data, target
 
 
@@ -46,6 +49,15 @@ def log_loss(filename, loss_value, first=True):
         torch.save(loss_list, filename)
 
 
+def timeSince(since, percent):
+    now = time.time()
+    s = now - since
+    es = s / (percent)
+    rs = es - s
+    return '%s (- %s)' % (datetime.timedelta(seconds=s),
+                          datetime.timedelta(seconds=rs))
+
+
 if __name__ == '__main__':
     print('{:-^60}'.format('log_loss test'))
     for i in range(100):
@@ -53,3 +65,7 @@ if __name__ == '__main__':
     loss_list = torch.load('test.pkl')
     print(loss_list)
     os.remove('test.pkl')
+
+    start = time.time()
+    time.sleep(1)
+    print(timeSince(start, 0.1))
