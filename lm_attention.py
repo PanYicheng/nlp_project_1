@@ -21,9 +21,11 @@ import matplotlib.ticker as ticker
 parser = argparse.ArgumentParser(description='PyTorch Language Model Attention')
 parser.add_argument('--data', type=str, default='./rocstory_data/',
                     help='location of the data corpus')
-parser.add_argument('--nencoderhid', type=int, default=400,
+parser.add_argument('--save', type=str, default='./nlp1models/',
+                    help='location to save the model')
+parser.add_argument('--encodernhid', type=int, default=400,
                     help='number of hidden units per layer in encoder')
-parser.add_argument('--encoderlayers', type=int, default=3,
+parser.add_argument('--encodernlayers', type=int, default=3,
                     help='number of encoder layers')
 parser.add_argument('--seed', type=int, default=42,
                     help='random seed')
@@ -293,6 +295,7 @@ def trainIters(encoder, decoder, n_iters, print_every=1000, plot_every=100, lear
 
     for iter in range(1, n_iters + 1):
         for pair_index in range(len(training_pairs)):
+            print('Pair index: {:>8}'.format(pair_index), end='\r')
             training_pair = tensorsFromPair(training_pairs[pair_index])
             input_tensor = training_pair[0]
             target_tensor = training_pair[1]
@@ -305,24 +308,24 @@ def trainIters(encoder, decoder, n_iters, print_every=1000, plot_every=100, lear
         if iter % print_every == 0:
             print_loss_avg = print_loss_total / print_every
             print_loss_total = 0
-            print('T: %s (Iter: %d %d%%) Loss: %.4f' % (timeSince(start, iter / n_iters),
-                                         iter, iter / n_iters * 100, print_loss_avg))
+            print('T: %s (Iter: %d %d%%) Loss: %.4f PPL: %.4f' % (timeSince(start, iter / n_iters),
+                                         iter, iter / n_iters * 100, print_loss_avg, torch.exp(print_loss_avg)))
             if print_loss_avg < best_train_loss:
                 best_train_loss = print_loss_avg
-                with open('lm_attention_model.pt', 'wb') as f:
+                if not os.path.exists(args.save):
+                    os.makedirs(args.save)
+                with open(os.path.join(args.save, 'lm_attention_model.pt'), 'wb') as f:
                     torch.save([encoder, decoder], f)
 
         if iter % plot_every == 0:
             plot_loss_avg = plot_loss_total / plot_every
             plot_losses.append(plot_loss_avg)
             plot_loss_total = 0
-
-    showPlot(plot_losses)
-
-
-import matplotlib.pyplot as plt
-
-
+    if not os.path.exists(args.save):
+        os.makedirs(args.save)
+    with open(os.path.join(args.save, 'lm_att_plot_lossses.pkl'), 'wb') as f:
+        torch.save(plot_losses, f)
+    # showPlot(plot_losses)
 
 
 def showPlot(points):
@@ -399,13 +402,11 @@ def evaluateAndShowAttention(input_sentence):
     showAttention(input_sentence, output_words, attentions)
 
 
-if __name__ == '__main__':
-    hidden_size = 256
-    encoder1 = EncoderRNN(num_tokens, hidden_size).to(device)
-    attn_decoder1 = AttnDecoderRNN(hidden_size, num_tokens,
-                                   dropout_p=0.1).to(device)
+encoder1 = EncoderRNN(num_tokens, args.encodernhid).to(device)
+attn_decoder1 = AttnDecoderRNN(args.encodernhid, num_tokens,
+                               dropout_p=0.1).to(device)
 
-    trainIters(encoder1, attn_decoder1, 500, print_every=10)
+trainIters(encoder1, attn_decoder1, 500, print_every=10)
 
-    val_loss = evaluate(encoder1, attn_decoder1)
-    print('Val loss:{:5.3f}'.format(val_loss))
+val_loss = evaluate(encoder1, attn_decoder1)
+print('| Val loss:{:5.3f} | Val ppl: {:5.3f}'.format(val_loss, torch.exp(val_loss)))
