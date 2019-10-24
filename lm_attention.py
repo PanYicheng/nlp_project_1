@@ -124,8 +124,8 @@ print('Num of test pair   : {:>10}'.format(len(corpus.test_pairs)))
 
 
 def tensorsFromPair(pair):
-    input_tensor = torch.tensor(pair[0])
-    target_tensor = torch.tensor(pair[1])
+    input_tensor = torch.tensor(pair[0]).to(device)
+    target_tensor = torch.tensor(pair[1]).to(device)
     return input_tensor, target_tensor
 
 
@@ -234,23 +234,28 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
 
     if use_teacher_forcing:
         # Teacher forcing: Feed the target as the next input
+        decoder_outputs = []
         for di in range(target_length):
             decoder_output, decoder_hidden, decoder_attention = decoder(
                 decoder_input, decoder_hidden, encoder_outputs)
-            loss += criterion(decoder_output, target_tensor[di])
             decoder_input = target_tensor[di]  # Teacher forcing
+            decoder_outputs.append(decoder_output)
+        loss += criterion(torch.cat(tuple(decoder_outputs), dim=0), target_tensor)
 
     else:
+        decoder_outputs = []
         # Without teacher forcing: use its own predictions as the next input
         for di in range(target_length):
             decoder_output, decoder_hidden, decoder_attention = decoder(
                 decoder_input, decoder_hidden, encoder_outputs)
+            decoder_outputs.append(decoder_output)
             topv, topi = decoder_output.topk(1)
             decoder_input = topi.squeeze().detach()  # detach from history as input
-
-            loss += criterion(decoder_output, target_tensor[di])
             if decoder_input.item() == EOS_token:
                 break
+        # if the decoder stops early, then decoder_outputs will have less elements than
+        # target_tensor
+        loss += criterion(torch.cat(tuple(decoder_outputs), dim=0), target_tensor[:len(decoder_outputs)])
 
     loss.backward()
 
