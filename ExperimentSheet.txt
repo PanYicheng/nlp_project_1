@@ -117,7 +117,7 @@ Update time: 13:23,Oct 19,2019
 
 
 8. gpu10 server : storymodels/model_tied_alpha.pt 
-	
+	Bleu:0.37647308449991757
     --data ./rocstory_data/ --save ./storymodels/model_tied_v1.pt \
     --model GRU --emsize 400 --nhid 400 --nlayers 3 --tied \
     --lr 1 --clip 0.25 --epochs 500 --batch_size 200 --bptt 70 \
