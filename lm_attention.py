@@ -1,139 +1,132 @@
-# TODO: reformat this model according to the main.py interface
+# TODO: Use batch train, consider padding input and output sequence
 from __future__ import unicode_literals, print_function, division
 from io import open
-import unicodedata
-import string
-import re
 import random
+import hashlib
+import argparse
+import time
+import math
 import os
+from collections import Counter
 
+import numpy as np
 import torch
 import torch.nn as nn
 from torch import optim
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
+plt.switch_backend('agg')
+import matplotlib.ticker as ticker
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-MAX_LENGTH = 100
-SOS_token = 0
-EOS_token = 1
+parser = argparse.ArgumentParser(description='PyTorch Language Model Attention')
+parser.add_argument('--data', type=str, default='./rocstory_data/',
+                    help='location of the data corpus')
+parser.add_argument('--nencoderhid', type=int, default=400,
+                    help='number of hidden units per layer in encoder')
+parser.add_argument('--encoderlayers', type=int, default=3,
+                    help='number of encoder layers')
+parser.add_argument('--seed', type=int, default=42,
+                    help='random seed')
+parser.add_argument('--cuda', action='store_true',
+                    help='use CUDA')
+args = parser.parse_args()
 
-
-class Lang:
-    def __init__(self, name):
-        self.name = name
-        self.word2index = {}
-        self.word2count = {}
-        self.index2word = {0: "SOS", 1: "EOS"}
-        self.n_words = 2  # Count SOS and EOS
-
-    def addSentence(self, sentence):
-        for word in sentence.split(' '):
-            self.addWord(word)
-
-    def addWord(self, word):
-        if word not in self.word2index:
-            self.word2index[word] = self.n_words
-            self.word2count[word] = 1
-            self.index2word[self.n_words] = word
-            self.n_words += 1
-        else:
-            self.word2count[word] += 1
-
-
-# Turn a Unicode string to plain ASCII, thanks to
-# https://stackoverflow.com/a/518232/2809427
-def unicodeToAscii(s):
-    return ''.join(
-        c for c in unicodedata.normalize('NFD', s)
-        if unicodedata.category(c) != 'Mn'
-    )
-
-
-def normalizeString(s):
-    # Lowercase, trim, and remove non-letter characters
-    s = unicodeToAscii(s.lower().strip())
-    s = re.sub(r"([.!?])", r" \1", s)
-    s = re.sub(r"[^a-zA-Z.!?]+", r" ", s)
-    return s
-
-
-def readLangs(lang_fn, reverse=False):
-    print("Reading lines...")
-
-    # Read the file and split into lines
-    lines = open(lang_fn, encoding='utf-8'). \
-        read().strip().split('\n')
-
-    # Split every line into pairs and normalize
-    pairs = [[normalizeString(s) for s in l.split('\t')[:2]] for l in lines]
-
-    # Reverse pairs, make Lang instances
-    if reverse:
-        pairs = [list(reversed(p)) for p in pairs]
-        input_lang = Lang('fra')
-        output_lang = Lang('eng')
+# Set the random seed manually for reproducibility.
+np.random.seed(args.seed)
+torch.manual_seed(args.seed)
+if torch.cuda.is_available():
+    if not args.cuda:
+        print("WARNING: You have a CUDA device, so you should probably run with --cuda")
+        device = torch.device("cpu")
     else:
-        input_lang = Lang('eng')
-        output_lang = Lang('fra')
-
-    return input_lang, output_lang, pairs
+        torch.cuda.manual_seed(args.seed)
+        device = torch.device("cuda")
 
 
-MAX_LENGTH = 10
+class Dictionary(object):
+    def __init__(self):
+        self.word2idx = {}
+        self.idx2word = []
+        self.counter = Counter()
+        self.total = 0
 
-eng_prefixes = (
-    "i am ", "i m ",
-    "he is", "he s ",
-    "she is", "she s ",
-    "you are", "you re ",
-    "we are", "we re ",
-    "they are", "they re "
-)
+    def add_word(self, word):
+        if word not in self.word2idx:
+            self.idx2word.append(word)
+            self.word2idx[word] = len(self.idx2word) - 1
+        token_id = self.word2idx[word]
+        self.counter[token_id] += 1
+        self.total += 1
+        return self.word2idx[word]
 
-
-def filterPair(p):
-    return len(p[0].split(' ')) < MAX_LENGTH and \
-           len(p[1].split(' ')) < MAX_LENGTH and \
-           p[1].startswith(eng_prefixes)
-
-
-def filterPairs(pairs):
-    return [pair for pair in pairs if filterPair(pair)]
+    def __len__(self):
+        return len(self.idx2word)
 
 
-def prepareData(lang_fn, reverse=False):
-    input_lang, output_lang, pairs = readLangs(lang_fn, reverse)
-    print("Read %s sentence pairs" % len(pairs))
-    pairs = filterPairs(pairs)
-    print("Trimmed to %s sentence pairs" % len(pairs))
-    print("Counting words...")
-    for pair in pairs:
-        input_lang.addSentence(pair[0])
-        output_lang.addSentence(pair[1])
-    print("Counted words:")
-    print(input_lang.name, input_lang.n_words)
-    print(output_lang.name, output_lang.n_words)
-    return input_lang, output_lang, pairs
+class Corpus(object):
+    def __init__(self, path):
+        self.dictionary = Dictionary()
+        self.MAX_LENGTH = None
+        self.train_pairs = self.tokenize(os.path.join(path, 'train.txt'))
+        self.valid_pairs = self.tokenize(os.path.join(path, 'valid.txt'))
+        self.test_pairs = self.tokenize(os.path.join(path, 'test.txt'))
 
+    def tokenize(self, path):
+        """Tokenize a text file."""
+        assert os.path.exists(path)
+        # Add words to the dictionary
+        with open(path, 'r') as f:
+            lines = f.readlines()
+        tokens = 0
+        for line in lines:
+            # append <eos> to every sample sequence
+            words = line.split() + ['<EOS>']
+            input_words = line[:line.find('<EOL>')+5].split()
+            output_words = line[line.find('<EOL>')+6:].split()
+            # Calculate max sequence length
+            if self.MAX_LENGTH is None:
+                self.MAX_LENGTH = len(input_words)
+            else:
+                self.MAX_LENGTH = max(len(input_words), self.MAX_LENGTH)
+            tokens += len(words)
+            for word in words:
+                self.dictionary.add_word(word)
+        self.dictionary.add_word('<SOS>')
+    # Tokenize file content
+        pairs = []
+        token = 0
+        for line in lines:
+            input_words = line[:line.find('<EOL>') + 5].split()
+            # append <EOS>  and prepend <SOS> to every output sequence
+            output_words = ['<SOS>']+line[line.find('<EOL>') + 6:].split()+['<EOS>']
+            pairs.append(([self.dictionary.word2idx[i] for i in input_words],
+                          [self.dictionary.word2idx[i] for i in output_words]))
+        return pairs
 
-input_lang, output_lang, pairs = prepareData('data/fra.txt', True)
-print(random.choice(pairs))
+fn = 'corpus.{}.data'.format(hashlib.md5((args.data+'(lm_attention)').
+                                         encode()).hexdigest())
+if os.path.exists(fn):
+    print('Loading cached dataset...')
+    corpus = torch.load(fn)
+else:
+    print('Producing dataset...')
+    corpus = Corpus(args.data)
+    torch.save(corpus, fn)
 
-
-def indexesFromSentence(lang, sentence):
-    return [lang.word2index[word] for word in sentence.split(' ')]
-
-
-def tensorFromSentence(lang, sentence):
-    indexes = indexesFromSentence(lang, sentence)
-    indexes.append(EOS_token)
-    return torch.tensor(indexes, dtype=torch.long, device=device).view(-1, 1)
+SOS_token = corpus.dictionary.word2idx['<SOS>']
+EOS_token =corpus.dictionary.word2idx['<EOS>']
+MAX_LENGTH = corpus.MAX_LENGTH
+num_tokens = len(corpus.dictionary)
+print('Num of tokens       : {:>10}'.format(num_tokens))
+print('Num of train pair : {:>10}'.format(len(corpus.train_pairs)))
+print('Num of valid pair : {:>10}'.format(len(corpus.valid_pairs)))
+print('Num of test pair   : {:>10}'.format(len(corpus.test_pairs)))
 
 
 def tensorsFromPair(pair):
-    input_tensor = tensorFromSentence(input_lang, pair[0])
-    target_tensor = tensorFromSentence(output_lang, pair[1])
-    return (input_tensor, target_tensor)
+    input_tensor = torch.tensor(pair[0])
+    target_tensor = torch.tensor(pair[1])
+    return input_tensor, target_tensor
 
 
 class EncoderRNN(nn.Module):
@@ -154,25 +147,25 @@ class EncoderRNN(nn.Module):
         return torch.zeros(1, 1, self.hidden_size, device=device)
 
 
-class DecoderRNN(nn.Module):
-    def __init__(self, hidden_size, output_size):
-        super(DecoderRNN, self).__init__()
-        self.hidden_size = hidden_size
-
-        self.embedding = nn.Embedding(output_size, hidden_size)
-        self.gru = nn.GRU(hidden_size, hidden_size)
-        self.out = nn.Linear(hidden_size, output_size)
-        self.softmax = nn.LogSoftmax(dim=1)
-
-    def forward(self, input, hidden):
-        output = self.embedding(input).view(1, 1, -1)
-        output = F.relu(output)
-        output, hidden = self.gru(output, hidden)
-        output = self.softmax(self.out(output[0]))
-        return output, hidden
-
-    def initHidden(self):
-        return torch.zeros(1, 1, self.hidden_size, device=device)
+# class DecoderRNN(nn.Module):
+#     def __init__(self, hidden_size, output_size):
+#         super(DecoderRNN, self).__init__()
+#         self.hidden_size = hidden_size
+#
+#         self.embedding = nn.Embedding(output_size, hidden_size)
+#         self.gru = nn.GRU(hidden_size, hidden_size)
+#         self.out = nn.Linear(hidden_size, output_size)
+#         self.softmax = nn.LogSoftmax(dim=1)
+#
+#     def forward(self, input, hidden):
+#         output = self.embedding(input).view(1, 1, -1)
+#         output = F.relu(output)
+#         output, hidden = self.gru(output, hidden)
+#         output = self.softmax(self.out(output[0]))
+#         return output, hidden
+#
+#     def initHidden(self):
+#         return torch.zeros(1, 1, self.hidden_size)
 
 
 class AttnDecoderRNN(nn.Module):
@@ -215,9 +208,7 @@ class AttnDecoderRNN(nn.Module):
 teacher_forcing_ratio = 0.5
 
 
-def train(input_tensor, target_tensor, encoder, decoder,
-          encoder_optimizer, decoder_optimizer, criterion,
-          max_length=MAX_LENGTH):
+def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion, max_length=MAX_LENGTH):
     encoder_hidden = encoder.initHidden()
 
     encoder_optimizer.zero_grad()
@@ -226,8 +217,7 @@ def train(input_tensor, target_tensor, encoder, decoder,
     input_length = input_tensor.size(0)
     target_length = target_tensor.size(0)
 
-    encoder_outputs = torch.zeros(max_length, encoder.hidden_size,
-                                  device=device)
+    encoder_outputs = torch.zeros(max_length, encoder.hidden_size, device=device)
 
     loss = 0
 
@@ -270,10 +260,6 @@ def train(input_tensor, target_tensor, encoder, decoder,
     return loss.item() / target_length
 
 
-import time
-import math
-
-
 def asMinutes(s):
     m = math.floor(s / 60)
     s -= m * 60
@@ -293,28 +279,33 @@ def trainIters(encoder, decoder, n_iters, print_every=1000, plot_every=100, lear
     plot_losses = []
     print_loss_total = 0  # Reset every print_every
     plot_loss_total = 0  # Reset every plot_every
+    best_train_loss = float("inf")
 
     encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
-    training_pairs = [tensorsFromPair(random.choice(pairs))
-                      for i in range(n_iters)]
+    training_pairs = corpus.train_pairs
     criterion = nn.NLLLoss()
 
     for iter in range(1, n_iters + 1):
-        training_pair = training_pairs[iter - 1]
-        input_tensor = training_pair[0]
-        target_tensor = training_pair[1]
+        for pair_index in range(len(training_pairs)):
+            training_pair = tensorsFromPair(training_pairs[pair_index])
+            input_tensor = training_pair[0]
+            target_tensor = training_pair[1]
 
-        loss = train(input_tensor, target_tensor, encoder,
-                     decoder, encoder_optimizer, decoder_optimizer, criterion)
-        print_loss_total += loss
-        plot_loss_total += loss
+            loss = train(input_tensor, target_tensor, encoder,
+                         decoder, encoder_optimizer, decoder_optimizer, criterion)
+            print_loss_total += loss
+            plot_loss_total += loss
 
         if iter % print_every == 0:
             print_loss_avg = print_loss_total / print_every
             print_loss_total = 0
-            print('%s (%d %d%%) %.4f' % (timeSince(start, iter / n_iters),
+            print('T: %s (Iter: %d %d%%) Loss: %.4f' % (timeSince(start, iter / n_iters),
                                          iter, iter / n_iters * 100, print_loss_avg))
+            if print_loss_avg < best_train_loss:
+                best_train_loss = print_loss_avg
+                with open('lm_attention_model.pt', 'wb') as f:
+                    torch.save([encoder, decoder], f)
 
         if iter % plot_every == 0:
             plot_loss_avg = plot_loss_total / plot_every
@@ -326,9 +317,7 @@ def trainIters(encoder, decoder, n_iters, print_every=1000, plot_every=100, lear
 
 import matplotlib.pyplot as plt
 
-plt.switch_backend('agg')
-import matplotlib.ticker as ticker
-import numpy as np
+
 
 
 def showPlot(points):
@@ -340,51 +329,42 @@ def showPlot(points):
     plt.plot(points)
 
 
-def evaluate(encoder, decoder, sentence, max_length=MAX_LENGTH):
+def evaluate(encoder, decoder, max_length=MAX_LENGTH):
     with torch.no_grad():
-        input_tensor = tensorFromSentence(input_lang, sentence)
-        input_length = input_tensor.size()[0]
-        encoder_hidden = encoder.initHidden()
+        loss = 0
+        criterion = torch.nn.NLLLoss(reduction='mean')
+        for pair in corpus.valid_pairs:
+            input_tensor = tensorsFromPair(pair)[0]
+            target_tensor = tensorsFromPair(pair)[1]
+            input_length = input_tensor.size()[0]
+            encoder_hidden = encoder.initHidden()
 
-        encoder_outputs = torch.zeros(max_length, encoder.hidden_size, device=device)
+            encoder_outputs = torch.zeros(max_length, encoder.hidden_size, device=device)
 
-        for ei in range(input_length):
-            encoder_output, encoder_hidden = encoder(input_tensor[ei],
-                                                     encoder_hidden)
-            encoder_outputs[ei] += encoder_output[0, 0]
+            for ei in range(input_length):
+                encoder_output, encoder_hidden = encoder(input_tensor[ei],
+                                                         encoder_hidden)
+                encoder_outputs[ei] += encoder_output[0, 0]
 
-        decoder_input = torch.tensor([[SOS_token]], device=device)  # SOS
+            decoder_input = torch.tensor([[SOS_token]], device=device)  # SOS
 
-        decoder_hidden = encoder_hidden
+            decoder_hidden = encoder_hidden
 
-        decoded_words = []
-        decoder_attentions = torch.zeros(max_length, max_length)
+            decoder_outputs = []
+            decoder_attentions = torch.zeros(max_length, max_length)
 
-        for di in range(max_length):
-            decoder_output, decoder_hidden, decoder_attention = decoder(
-                decoder_input, decoder_hidden, encoder_outputs)
-            decoder_attentions[di] = decoder_attention.data
-            topv, topi = decoder_output.data.topk(1)
-            if topi.item() == EOS_token:
-                decoded_words.append('<EOS>')
-                break
-            else:
-                decoded_words.append(output_lang.index2word[topi.item()])
+            for di in range(max_length):
+                decoder_output, decoder_hidden, decoder_attention = decoder(
+                    decoder_input, decoder_hidden, encoder_outputs)
+                decoder_attentions[di] = decoder_attention.data
+                topv, topi = decoder_output.data.topk(1)
+                decoder_outputs.append(decoder_output.squeeze())
+                if topi.item() == EOS_token:
+                    break
+                decoder_input = topi.squeeze().detach()
+            loss += criterion(torch.cat(decoder_outputs, dim=0), target_tensor).item()
 
-            decoder_input = topi.squeeze().detach()
-
-        return decoded_words, decoder_attentions[:di + 1]
-
-
-def evaluateRandomly(encoder, decoder, n=10):
-    for i in range(n):
-        pair = random.choice(pairs)
-        print('>', pair[0])
-        print('=', pair[1])
-        output_words, attentions = evaluate(encoder, decoder, pair[0])
-        output_sentence = ' '.join(output_words)
-        print('<', output_sentence)
-        print('')
+        return loss / len(corpus.valid_pairs)
 
 
 def showAttention(input_sentence, output_words, attentions):
@@ -416,16 +396,11 @@ def evaluateAndShowAttention(input_sentence):
 
 if __name__ == '__main__':
     hidden_size = 256
-    encoder1 = EncoderRNN(input_lang.n_words, hidden_size).to(device)
-    attn_decoder1 = AttnDecoderRNN(hidden_size, output_lang.n_words,
+    encoder1 = EncoderRNN(num_tokens, hidden_size).to(device)
+    attn_decoder1 = AttnDecoderRNN(hidden_size, num_tokens,
                                    dropout_p=0.1).to(device)
 
-    trainIters(encoder1, attn_decoder1, 75000, print_every=5000)
+    trainIters(encoder1, attn_decoder1, 500, print_every=10)
 
-    evaluateRandomly(encoder1, attn_decoder1)
-
-    output_words, attentions = evaluate(
-        encoder1, attn_decoder1, "je suis trop froid .")
-    plt.matshow(attentions.numpy())
-
-    evaluateAndShowAttention("elle a cinq ans de moins que moi .")
+    val_loss = evaluate(encoder1, attn_decoder1)
+    print('Val loss:{:5.3f}'.format(val_loss))

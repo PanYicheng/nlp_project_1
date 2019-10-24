@@ -1,5 +1,5 @@
 Update time: 13:23,Oct 19,2019
-1. gpu4 server: nlp1models/model_story.pt epoch@325
+1. gpu4 server: nlp1models/model_story.pt
 	| test loss  3.13 | test ppl    22.85 | test bpc    4.514
 	| valid loss  3.23 | valid ppl    25.26 | valid bpc    4.659
 	| train loss  3.16 | train ppl    23.59 | train bpc    4.560
@@ -91,7 +91,8 @@ Update time: 13:23,Oct 19,2019
     --when 200 300
 
 6. gpu10 server : rndmodels/model_key.pt 
-
+	| test loss  5.35 | test ppl   209.74 | test bpc    7.712
+	| valid loss  5.38 | valid ppl   217.02 | valid bpc    7.762
 
 
     --data ./rocstory_data/rnd_storyline_data/ --save ./rndmodels/model_key.pt \
@@ -117,7 +118,10 @@ Update time: 13:23,Oct 19,2019
 
 
 8. gpu10 server : storymodels/model_tied_alpha.pt 
-	
+	| test loss  4.09 | test ppl    59.81 | test bpc    5.902
+	| valid loss  4.15 | valid ppl    63.48 | valid bpc    5.988
+	| train loss  4.98 | train ppl   145.31 | train bpc    7.183
+	Bleu: 0.37647308449991757
     --data ./rocstory_data/ --save ./storymodels/model_tied_v1.pt \
     --model GRU --emsize 400 --nhid 400 --nlayers 3 --tied \
     --lr 1 --clip 0.25 --epochs 500 --batch_size 200 --bptt 70 \
