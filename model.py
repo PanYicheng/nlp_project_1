@@ -91,16 +91,22 @@ class RNNModel(nn.Module):
             for seq_index in range(emb.size()[0]):
                 # output: S, N, nhid; h_n:nlayers, N, nhid
                 h_n_batchfirst = h_n.transpose(0, 1)
-                h_n_batchfirst = h_n_batchfirst.view(h_n_batchfirst.size()[0], -1)
+                h_n_batchfirst = h_n_batchfirst.reshape(h_n_batchfirst.size()[0], -1)
                 # h_n_batchfirst: N, (nlayers*nhid)
                 attn_weights = F.softmax(self.attn(
                     torch.cat((emb[seq_index], h_n_batchfirst), dim=1)))
+                # attn_weights: N, max_length
                 attn_applied = torch.bmm(attn_weights.unsqueeze(1),
                                          output.transpose(0, 1))
                 # attn_applied: N, 1, nhid
-                attn_combine_output = F.relu(self.attn_combine(
-                    torch.cat((emb[seq_index], attn_applied.squeeze()), dim=1)
-                ))
+                attn_combine_output = F.relu(
+                    self.attn_combine(
+                        torch.cat(
+                            (emb[seq_index],
+                             attn_applied.view(attn_applied.size()[0], attn_applied.size()[2])),
+                            dim=1)
+                    )
+                )
                 # attn_combine_output: N, nhid
                 decoder_rnns_output, h_n = self.decoder_rnns(
                     attn_combine_output.unsqueeze(0), h_n)

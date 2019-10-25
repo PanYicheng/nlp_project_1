@@ -120,7 +120,7 @@ else:
     torch.save(corpus, fn)
 ntokens = len(corpus.dictionary)
 print('Num tokens: {}'.format(ntokens))
-eval_batch_size = 80
+eval_batch_size = args.batch_size
 test_batch_size = 1
 train_data = batchify(corpus.train, args.batch_size, args)
 val_data = batchify(corpus.valid, eval_batch_size, args)
@@ -134,7 +134,7 @@ model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid,
                        args.nlayers, args.dropoute, args.dropouti,
                        args.dropoutrnn, args.dropout, args.wdrop,
                        args.tied,
-                       use_attention=args.attention, max_length=40)
+                       use_attention=args.attention, max_length=args.bptt)
 ###
 if args.resume:
     print('Resuming model ...')
@@ -191,6 +191,11 @@ def evaluate(data_source, batch_size=10):
     hidden = model.init_hidden(batch_size)
     for i in range(0, data_source.size(0) - 1, args.bptt):
         data, targets = get_batch(data_source, i, args)
+        # in attention model, the input data needs to have the same length
+        # as attention layer's max length, if the last batch data is not long
+        # enough, skip it
+        if args.attention and len(data) < args.bptt:
+            break
         output, hidden = model(data, hidden)
         total_loss += len(data) * criterion(model.decoder.weight, model.decoder.bias, output, targets).item()
         hidden = repackage_hidden(hidden)
@@ -209,7 +214,11 @@ def train():
     batches = len(train_data) // args.bptt
     for batch, i in enumerate(range(0, train_data.size(0) - 1, args.bptt)):
         data, targets = get_batch(train_data, i, args)
-
+        # in attention model, the input data needs to have the same length
+        # as attention layer's max length, if the last batch data is not long
+        # enough, skip it
+        if args.attention and len(data) < args.bptt:
+            break
         # Starting each batch, we detach the hidden state from how it was previously produced.
         # If we didn't, the model would try backpropagating all the way to start of the dataset.
         hidden = repackage_hidden(hidden)
