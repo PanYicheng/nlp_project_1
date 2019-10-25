@@ -104,10 +104,11 @@ Update time: 13:23,Oct 19,2019
     --when 100 150
 
 
-7. gpu10 server : rndmodels/model_key.pt 
-
-
-
+7. gpu10 server : rndmodels/model_story.pt 
+	| test loss  3.65 | test ppl    38.50 | test bpc    5.267
+	| valid loss  3.72 | valid ppl    41.28 | valid bpc    5.367
+	| loss  4.04 | ppl    56.80 | bpc    5.828
+	Bleu pipelined with rnd key model: 0.2143633616753024 ./rocstory_data/rnd_story_data/test.txt.generateoutput.pipelined
     --data ./rocstory_data/rnd_story_data/ --save ./rndmodels/model_story.pt \
     --model GRU --emsize 400 --nhid 400 --nlayers 3 --tied \
     --lr 1 --clip 0.25 --epochs 200 --batch_size 200 --bptt 70 \

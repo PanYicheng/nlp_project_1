@@ -11,6 +11,11 @@ import model
 from utils import *
 from splitcross import SplitCrossEntropyLoss
 import warnings
+from torch.utils.tensorboard import SummaryWriter
+
+# default `log_dir` is "runs" - we'll be more specific here
+tb_writer = SummaryWriter('runs/attention')
+tb_writer_flag = False
 
 warnings.filterwarnings("ignore")
 
@@ -20,17 +25,17 @@ parser.add_argument('--data', type=str, default='./rocstory_data/',
                     help='location of the data corpus')
 parser.add_argument('--model', type=str, default='GRU',
                     help='type of recurrent net (LSTM, QRNN, GRU)')
-parser.add_argument('--emsize', type=int, default=400,
+parser.add_argument('--emsize', type=int, default=200,
                     help='size of word embeddings')
-parser.add_argument('--nhid', type=int, default=1150,
+parser.add_argument('--nhid', type=int, default=200,
                     help='number of hidden units per layer')
-parser.add_argument('--nlayers', type=int, default=3,
+parser.add_argument('--nlayers', type=int, default=1,
                     help='number of layers')
 parser.add_argument('--lr', type=float, default=30,
                     help='initial learning rate')
 parser.add_argument('--clip', type=float, default=0.25,
                     help='gradient clipping')
-parser.add_argument('--epochs', type=int, default=8000,
+parser.add_argument('--epochs', type=int, default=100,
                     help='upper epoch limit')
 parser.add_argument('--batch_size', type=int, default=80, metavar='N',
                     help='batch size')
@@ -49,6 +54,8 @@ parser.add_argument('--wdrop', type=float, default=0,
                     help='weight drop between hidden to hidden cells')
 parser.add_argument('--tied', action='store_true',
                     help='tie projection matrix with embedding matrix')
+parser.add_argument('--attention', action='store_true',
+                    help='whether use attention in decoder phase')
 parser.add_argument('--seed', type=int, default=42,
                     help='random seed')
 parser.add_argument('--nonmono', type=int, default=5,
@@ -118,7 +125,7 @@ else:
     torch.save(corpus, fn)
 ntokens = len(corpus.dictionary)
 print('Num tokens: {}'.format(ntokens))
-eval_batch_size = 80
+eval_batch_size = args.batch_size
 test_batch_size = 1
 train_data = batchify(corpus.train, args.batch_size, args)
 val_data = batchify(corpus.valid, eval_batch_size, args)
@@ -131,7 +138,8 @@ criterion = None
 model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid,
                        args.nlayers, args.dropoute, args.dropouti,
                        args.dropoutrnn, args.dropout, args.wdrop,
-                       args.tied)
+                       args.tied,
+                       use_attention=args.attention, max_length=args.bptt)
 ###
 if args.resume:
     print('Resuming model ...')
@@ -188,30 +196,46 @@ def evaluate(data_source, batch_size=10):
     hidden = model.init_hidden(batch_size)
     for i in range(0, data_source.size(0) - 1, args.bptt):
         data, targets = get_batch(data_source, i, args)
+        # in attention model, the input data needs to have the same length
+        # as attention layer's max length, if the last batch data is not long
+        # enough, skip it
+        if args.attention and len(data) < args.bptt:
+            break
         output, hidden = model(data, hidden)
         total_loss += len(data) * criterion(model.decoder.weight, model.decoder.bias, output, targets).item()
         hidden = repackage_hidden(hidden)
     return total_loss / len(data_source)
 
 
-def train():
+def train(epoch):
+    global tb_writer_flag
     # Turn on training mode which enables dropout.
     if args.model == 'QRNN':
         model.reset()
     model.train()
     total_loss = 0
     hidden = model.init_hidden(args.batch_size)
-    start_time = time.time()
+    batch_estimate_time = time.time()
+    train_start_time = time.time()
+    batches = len(train_data) // args.bptt
     for batch, i in enumerate(range(0, train_data.size(0) - 1, args.bptt)):
         data, targets = get_batch(train_data, i, args)
-
+        # in attention model, the input data needs to have the same length
+        # as attention layer's max length, if the last batch data is not long
+        # enough, skip it
+        if args.attention and len(data) < args.bptt:
+            break
         # Starting each batch, we detach the hidden state from how it was previously produced.
         # If we didn't, the model would try backpropagating all the way to start of the dataset.
         hidden = repackage_hidden(hidden)
+        # write the first data to tensorboard
+        if not tb_writer_flag:
+            # tb_writer.add_graph(model, (data, hidden))
+            tb_writer_flag = True
         optimizer.zero_grad()
-
         output, hidden = model(data, hidden)
         loss = criterion(model.decoder.weight, model.decoder.bias, output, targets)
+
         # Activiation Regularization
         if args.alpha:
             loss = loss + args.alpha * output.pow(2).mean()
@@ -227,15 +251,21 @@ def train():
 
         total_loss += loss.data.item()
         if batch % args.log_interval == 0 and batch > 0:
-            elapsed = time.time() - start_time
+            elapsed = time.time() - batch_estimate_time
+            batch_estimate_time = time.time()
             cur_loss = total_loss / args.log_interval
-            log_loss(os.path.join(os.path.dirname(args.save), 'train_loss.pkl'),
-                     cur_loss, batch == args.log_interval)
-            start_time = time.time()
-            print('| epoch {:3d} | {:5d}/{:5d} batches | lr {:05.5f} | {:5.2f} ms/batch  | '
-                  'loss {:5.2f} | ppl {:8.2f} | bpc {:8.3f}'.format(
-                epoch, batch, len(train_data) // args.bptt, optimizer.param_groups[0]['lr'],
-                              elapsed * 1000 / args.log_interval, cur_loss, math.exp(cur_loss), cur_loss / math.log(2)))
+            tb_writer.add_scalar('training loss',
+                                 cur_loss,
+                                 batch+epoch*batches)
+            print('| {:5d}/{:5d} batches | lr {:05.5f} '
+                  '| {:5.2f} ms/batch  | loss {:5.2f} | ppl {:8.2f} '
+                  '| bpc {:8.3f} | Time: {}'.
+                  format(batch, batches, optimizer.param_groups[0]['lr'],
+                         elapsed * 1000 / args.log_interval,
+                         cur_loss, math.exp(cur_loss), cur_loss / math.log(2),
+                         timeSince(train_start_time, i / train_data.size()[0])
+                         )
+                  )
             total_loss = 0
         ###
 
@@ -255,7 +285,7 @@ try:
         optimizer = torch.optim.Adam(params, lr=args.lr, weight_decay=args.wdecay)
     for epoch in range(1, args.epochs + 1):
         epoch_start_time = time.time()
-        train()
+        train(epoch)
         if 't0' in optimizer.param_groups[0]:
             val_loss = evaluate(val_data, eval_batch_size)
             print('-' * 89)
@@ -292,8 +322,7 @@ try:
             model_save('{}.e{}'.format(args.save, epoch))
             print('Dividing learning rate by 10')
             optimizer.param_groups[0]['lr'] /= 10.
-        log_loss(os.path.join(os.path.dirname(args.save), 'val_loss.pkl'),
-                 val_loss, epoch == 1)
+        tb_writer.add_scalar('valid_loss', val_loss, epoch)
         best_val_loss.append(val_loss)
 
 except KeyboardInterrupt:
