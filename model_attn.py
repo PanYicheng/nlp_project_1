@@ -61,48 +61,73 @@ class RNNModel(nn.Module):
             self.decoder.bias.data.fill_(0)
             self.decoder.weight.data.uniform_(-initrange, initrange)
 
-    def forward(self, input, hidden, return_decoder_all_h=False):
+    def forward(self, input, targets, return_decoder_all_h=False,
+                use_teacher_forcing=False, SOS_index=0):
         """
         input shape: (S, N)
-        hidden shape: (nlayers*directions, N, nhid)
+        targets shape: (S, N)
         return_decoder_all_h: whether return every sequence value in decoder rnns
         """
+        batch_size=input.size()[1]
         emb = embedded_dropout(self.input_embedding, input, dropout=self.dropoute if self.training else 0)
         emb = self.lockdrop(emb, self.dropouti)
         # emb shape: (S, N, emsize)
-        output, h_n = self.encoder_rnns(emb, hidden)
-        output = self.lockdrop(output, self.dropout)
-        # output shape: (S, N, nhid), h_n shape: (nlayers*directions, N, nhid)
+        encoder_hidden = self.init_hidden(input.size()[1])
+        encoder_outputs, encoder_hidden = self.encoder_rnns(emb, encoder_hidden)
+        encoder_outputs = self.lockdrop(encoder_outputs, self.dropout)
+        # encoder_outputs shape: (S, N, nhid)
+        # encoder_hidden shape: (nlayers*directions, N, nhid)
         decoder_rnns_output_list = []
         decoder_rnns_h_list = []
-        for seq_index in range(emb.size()[0]):
-            h_n_batchfirst = h_n.transpose(0, 1)
-            h_n_batchfirst = h_n_batchfirst.reshape(h_n_batchfirst.size()[0], -1)
+        decoder_input = self.input_embedding.weight.new_full([1, input.size()[1]],
+                                                             SOS_index, dtype=torch.long)
+        # decoder_input shape: (1, N)
+        decoder_hidden = encoder_hidden
+        for seq_index in range(input.size()[0]):
+            decoder_input = self.input_embedding(decoder_input)
+            h_n_batchfirst = decoder_hidden.transpose(0, 1)
+            h_n_batchfirst = h_n_batchfirst.reshape(batch_size, -1)
             # h_n_batchfirst shape: (N, nlayers*directions*nhid)
             attn_weights = F.softmax(self.attn(
-                torch.cat((emb[seq_index], h_n_batchfirst), dim=1)))
+                torch.cat(
+                    (decoder_input.view(-1, decoder_input.size()[2]),
+                     h_n_batchfirst), dim=1)))
             # attn_weights shape: (N, S)
             attn_applied = torch.bmm(attn_weights.unsqueeze(1),
-                                        output.transpose(0, 1))
+                                     encoder_outputs.transpose(0, 1))
             # attn_applied shape: N, 1, nhid
             attn_combine_output = F.relu(
                 self.attn_combine(
-                    torch.cat((emb[seq_index], attn_applied.squeeze().view(
-                        attn_applied.size()[0],
-                        attn_applied.size()[2])),
-                              dim=1)))
+                    torch.cat(
+                        (decoder_input.view(-1, decoder_input.size()[2]),
+                         attn_applied.view(
+                             attn_applied.size()[0],
+                             attn_applied.size()[2])),
+                        dim=1)
+                )
+            )
             # attn_combine_output shape: N, nhid
-            decoder_rnns_output, h_n = self.decoder_rnns(
-                attn_combine_output.unsqueeze(0), h_n)
-            # decoder_rnns_output shape: (1, N, nhid), h_n shape: (nlayers*directions, N, nhid)
+            decoder_rnns_output, decoder_hidden = self.decoder_rnns(
+                attn_combine_output.unsqueeze(0), decoder_hidden)
+            # decoder_rnns_output shape: (1, N, nhid),
+            # decoder_hidden shape: (nlayers*directions, N, nhid)
+            decoder_rnns_output = self.decoder(decoder_rnns_output)
+            # decoder_rnns_output shape: (1, N, ntok)
+            if use_teacher_forcing:
+                decoder_input = targets[seq_index].view(-1, batch_size)
+            else:
+                topv, topi = decoder_rnns_output.topk(1, dim=2)
+                decoder_input = topi.view(1, batch_size).detach()
+
             decoder_rnns_output_list.append(decoder_rnns_output)
-            decoder_rnns_h_list.append(h_n)
-        
+            decoder_rnns_h_list.append(decoder_hidden)
+        decoder_rnns_output_tensor = torch.cat(tuple(decoder_rnns_output_list), dim=0)
+        # decoder_rnns_output_tensor shape: (S, N, ntok)
         if not return_decoder_all_h:
-            return torch.cat(tuple(decoder_rnns_output_list), dim=0), h_n
+            return decoder_rnns_output_tensor, decoder_hidden
         else:
-            return torch.cat(tuple(decoder_rnns_output_list), dim=0), \
-                    h_n, decoder_rnns_h_list
+            return decoder_rnns_output_tensor, decoder_hidden, \
+                   decoder_rnns_h_list
 
     def init_hidden(self, bsz):
         weight = next(self.encoder_rnns.parameters()).data
