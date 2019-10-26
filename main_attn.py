@@ -298,6 +298,8 @@ def evaluate(data_loader):
     total_loss = 0
     for i, sample in enumerate(data_loader):
         inputs, targets = sample
+        inputs = inputs.transpose(0, 1)
+        targets = targets.transpose(0, 1)
         if args.cuda:
             inputs = inputs.cuda()
             targets = targets.cuda()

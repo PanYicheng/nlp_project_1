@@ -96,7 +96,7 @@ class RNNModel(nn.Module):
             attn_applied = torch.bmm(attn_weights.unsqueeze(1),
                                      encoder_outputs.transpose(0, 1))
             # attn_applied shape: N, 1, nhid
-            attn_combine_output = F.relu(
+            attn_combine_output = F.sigmoid(
                 self.attn_combine(
                     torch.cat(
                         (decoder_input.view(-1, decoder_input.size()[2]),

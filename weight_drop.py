@@ -38,12 +38,14 @@ class WeightDrop(torch.nn.Module):
             print('Applying weight drop of {} to {}'.format(self.dropout, name_w))
             w = getattr(self.module, name_w)
             # Delete original weight
-            delattr(self.module, name_w)
+            # delattr(self.module, name_w)
+            # setattr(self.module, None)
             self.module.register_parameter(name_w + '_raw', Parameter(w))
 
     def _setweights(self):
         for name_w in self.weights:
             raw_w = getattr(self.module, name_w + '_raw')
+            # raw_w = getattr(self.module, name_w)
             w = None
             if self.variational:
                 mask = torch.ones(raw_w.size(0), 1, requires_grad=True)
