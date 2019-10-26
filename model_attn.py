@@ -49,7 +49,7 @@ class RNNModel(nn.Module):
             if self.nhid != self.emsize:
                 raise ValueError('When using the tied flag, nhid must be equal to emsize')
             self.decoder = nn.Linear(self.nhid, self.ntoken, bias=False)
-            self.decoder.weight = self.encoinput_embeddingder.weight
+            self.decoder.weight = self.input_embedding.weight
         else:
             self.decoder = nn.Linear(self.nhid, self.ntoken)
         self.init_weights()
