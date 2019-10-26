@@ -7,7 +7,7 @@ import os
 import hashlib
 
 import data
-import model
+import model_attn
 from utils import *
 from splitcross import SplitCrossEntropyLoss
 import warnings
@@ -19,7 +19,7 @@ tb_writer_flag = False
 
 warnings.filterwarnings("ignore")
 
-parser = argparse.ArgumentParser(description='PyTorch RNN/LSTM '
+parser = argparse.ArgumentParser(description='PyTorch RNN Attention-based'
                                              'Language Model')
 parser.add_argument('--data', type=str, default='./rocstory_data/',
                     help='location of the data corpus')
@@ -31,7 +31,7 @@ parser.add_argument('--nhid', type=int, default=200,
                     help='number of hidden units per layer')
 parser.add_argument('--nlayers', type=int, default=1,
                     help='number of layers')
-parser.add_argument('--lr', type=float, default=30,
+parser.add_argument('--lr', type=float, default=10,
                     help='initial learning rate')
 parser.add_argument('--clip', type=float, default=0.25,
                     help='gradient clipping')
@@ -54,8 +54,6 @@ parser.add_argument('--wdrop', type=float, default=0,
                     help='weight drop between hidden to hidden cells')
 parser.add_argument('--tied', action='store_true',
                     help='tie projection matrix with embedding matrix')
-parser.add_argument('--attention', action='store_true',
-                    help='whether use attention in decoder phase')
 parser.add_argument('--seed', type=int, default=42,
                     help='random seed')
 parser.add_argument('--nonmono', type=int, default=5,
@@ -135,25 +133,17 @@ test_data = batchify(corpus.test, test_batch_size, args)
 ###############################################################################
 criterion = None
 
-model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid,
+model = model_attn.RNNModel(args.model, ntokens, args.emsize, args.nhid,
                        args.nlayers, args.dropoute, args.dropouti,
-                       args.dropoutrnn, args.dropout, args.wdrop,
-                       args.tied,
-                       use_attention=args.attention, max_length=args.bptt)
+                       args.dropoutrnn, args.dropout, args.tied,
+                       max_length=args.bptt)
 ###
 if args.resume:
     print('Resuming model ...')
     model_load(args.resume)
     optimizer.param_groups[0]['lr'] = args.lr
-    model.dropoute, model.dropouti, model.dropout = args.dropoute, \
-                                                    args.dropouti, args.dropout
-    # if args.whhdrop:
-    #     from weight_drop import WeightDrop
-    #     for rnn in model.rnns:
-    #         if type(rnn) == WeightDrop:
-    #             rnn.dropout = args.whhdrop
-    #         elif rnn.zoneout > 0:
-    #             rnn.zoneout = args.whhdrop
+    model.dropoute, model.dropouti, model.dropout = \
+        args.dropoute, args.dropouti, args.dropout
 ###
 if not criterion:
     splits = []
@@ -209,9 +199,6 @@ def evaluate(data_source, batch_size=10):
 
 def train(epoch):
     global tb_writer_flag
-    # Turn on training mode which enables dropout.
-    if args.model == 'QRNN':
-        model.reset()
     model.train()
     total_loss = 0
     hidden = model.init_hidden(args.batch_size)
@@ -223,14 +210,17 @@ def train(epoch):
         # in attention model, the input data needs to have the same length
         # as attention layer's max length, if the last batch data is not long
         # enough, skip it
+        # TODO: use padding to extend length
         if args.attention and len(data) < args.bptt:
             break
-        # Starting each batch, we detach the hidden state from how it was previously produced.
-        # If we didn't, the model would try backpropagating all the way to start of the dataset.
+        # Starting each batch, we detach the hidden state from how it was 
+        # previously produced.If we didn't, the model would try backpropagating
+        # all the way to start of the dataset.
         hidden = repackage_hidden(hidden)
         # write the first data to tensorboard
         if not tb_writer_flag:
-            # tb_writer.add_graph(model, (data, hidden))
+            # TODO: cannot add model with weight drop
+            tb_writer.add_graph(model, (data, hidden))
             tb_writer_flag = True
         optimizer.zero_grad()
         output, hidden = model(data, hidden)
