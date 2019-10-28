@@ -69,7 +69,8 @@ Update time: 13:23,Oct 19,2019
 	| test loss  3.56 | test ppl    35.28 | test bpc    5.141
 	| valid loss  3.65 | valid ppl    38.37 | valid bpc    5.262
 	| train  loss  4.52 | train ppl    92.29 | train bpc    6.528
-	Bleu:
+	Bleu pipeline storyline: Nan
+	Bleu rake storyline:
     --data ./rocstory_data/ --save ./storymodels/model_tied_v2.pt \
     --model GRU --emsize 800 --nhid 800 --nlayers 3 --tied \
     --lr 5 --clip 0.25 --epochs 500 --batch_size 200 --bptt 70 \
@@ -120,8 +121,11 @@ Update time: 13:23,Oct 19,2019
 
 
 9. gpu10 server : storymodels/model_tied_data_fix.pt
-
-
+	| test loss  3.31 | test ppl    27.43 | test bpc    4.778
+	| valid loss  3.40 | valid ppl    30.03 | valid bpc    4.908
+	| loss  3.84 | ppl    46.32 | bpc    5.533
+	Bleu pipeline storyline: Nan
+	Bleu rake storyline: 0.3479
 	 --data ./rocstory_data/ --save ./storymodels/model_tied_data_fix.pt \
     --model GRU --emsize 400 --nhid 400 --nlayers 3 --tied \
     --lr 5 --clip 0.25 --epochs 300 --batch_size 200 --bptt 70 \
