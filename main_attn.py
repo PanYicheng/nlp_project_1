@@ -340,7 +340,7 @@ def train(epoch):
         optimizer.zero_grad()
         output, hidden = model(inputs, targets, input_lens, target_lens,
                                return_decoder_all_h=False,
-                               use_teacher_forcing=False,
+                               use_teacher_forcing=np.random.rand() > 0.5,
                                SOS_index=corpus.dictionary.word2idx['<SOS>'])
         output = output.permute(1, 2, 0)
         targets = targets.permute(1, 0)
