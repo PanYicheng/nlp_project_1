@@ -223,13 +223,13 @@ class MyDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, key):
         pair = self.pairs[key]
-        input_sequence = torch.full([self.max_seq_length], self.ignore_index,
+        input_sequence = torch.full([self.max_seq_length], 0,
                                     dtype=torch.long)
-        output_sequence = torch.full([self.max_seq_length], self.ignore_index,
+        output_sequence = torch.full([self.max_seq_length], 0,
                                      dtype=torch.long)
         input_sequence[:len(pair[0])] = torch.tensor(pair[0], dtype=torch.long)
         output_sequence[:len(pair[1])] = torch.tensor(pair[1], dtype=torch.long)
-        return input_sequence, output_sequence
+        return input_sequence, output_sequence, len(pair[0]), len(pair[1])
 
     def __len__(self):
         return len(self.pairs)
@@ -297,20 +297,21 @@ def evaluate(data_loader):
     model.eval()
     total_loss = 0
     for i, sample in enumerate(data_loader):
-        inputs, targets = sample
+        inputs, targets, input_lens, target_lens = sample
         inputs = inputs.transpose(0, 1)
         targets = targets.transpose(0, 1)
         if args.cuda:
             inputs = inputs.cuda()
             targets = targets.cuda()
         # inputs shape: (S, N)  targets shape: (S, N)
-        outputs, hidden = model(inputs, targets, return_decoder_all_h=False,
+        outputs, hidden = model(inputs, targets, input_lens, target_lens,
+                                return_decoder_all_h=False,
                                 use_teacher_forcing=False,
                                 SOS_index=corpus.dictionary.word2idx['<SOS>'])
         # outputs shape: (S, N, ntok)
         if args.evaluate_print_sample and i==0:
             print('Inputs:\n---- ', corpus.list_to_sentence(inputs[:, 0]))
-            outputs_word_ids = outputs.topk(1, dim=2)[:, 0, 0]
+            outputs_word_ids = outputs.topk(1, dim=2)[1][:, 0, 0]
             print('Predicts:\n---- ', corpus.list_to_sentence(outputs_word_ids))
             print('Real words:\n---- ', corpus.list_to_sentence(targets[:, 0]))
         outputs = outputs.permute(1, 2, 0)
@@ -327,7 +328,7 @@ def train(epoch):
     batch_estimate_time = time.time()
     train_start_time = time.time()
     for batch, sample in enumerate(train_data):
-        inputs, targets = sample
+        inputs, targets, input_lens, target_lens = sample
         inputs = inputs.transpose(0, 1)
         targets = targets.transpose(0, 1)
         if args.cuda:
@@ -335,10 +336,11 @@ def train(epoch):
             targets = targets.cuda()
         # write the first data to tensorboard
         if not tb_writer_flag:
-            tb_writer.add_graph(model, (inputs, targets))
+            # tb_writer.add_graph(model, (inputs, targets))
             tb_writer_flag = True
         optimizer.zero_grad()
-        output, hidden = model(inputs, targets, return_decoder_all_h=False,
+        output, hidden = model(inputs, targets, input_lens, target_lens,
+                               return_decoder_all_h=False,
                                use_teacher_forcing=False,
                                SOS_index=corpus.dictionary.word2idx['<SOS>'])
         output = output.permute(1, 2, 0)

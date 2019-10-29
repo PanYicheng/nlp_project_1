@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from embed_regularize import embedded_dropout
 from locked_dropout import LockedDropout
@@ -61,7 +62,8 @@ class RNNModel(nn.Module):
             self.decoder.bias.data.fill_(0)
             self.decoder.weight.data.uniform_(-initrange, initrange)
 
-    def forward(self, input, targets, return_decoder_all_h=False,
+    def forward(self, input, targets, input_lens, target_lens,
+                return_decoder_all_h=False,
                 use_teacher_forcing=False, SOS_index=0):
         """
         input shape: (S, N)
@@ -69,11 +71,14 @@ class RNNModel(nn.Module):
         return_decoder_all_h: whether return every sequence value in decoder rnns
         """
         batch_size=input.size()[1]
-        emb = embedded_dropout(self.input_embedding, input, dropout=self.dropoute if self.training else 0)
+        emb = embedded_dropout(self.input_embedding, input,
+                               dropout=self.dropoute if self.training else 0)
         emb = self.lockdrop(emb, self.dropouti)
         # emb shape: (S, N, emsize)
         encoder_hidden = self.init_hidden(input.size()[1])
-        encoder_outputs, encoder_hidden = self.encoder_rnns(emb, encoder_hidden)
+        packed_emb = pack_padded_sequence(emb, input_lens, batch_first=False)
+        encoder_outputs, encoder_hidden = self.encoder_rnns(packed_emb, encoder_hidden)
+        encoder_outputs, _ = pad_packed_sequence(encoder_outputs)
         encoder_outputs = self.lockdrop(encoder_outputs, self.dropout)
         # encoder_outputs shape: (S, N, nhid)
         # encoder_hidden shape: (nlayers*directions, N, nhid)
@@ -96,7 +101,7 @@ class RNNModel(nn.Module):
             attn_applied = torch.bmm(attn_weights.unsqueeze(1),
                                      encoder_outputs.transpose(0, 1))
             # attn_applied shape: N, 1, nhid
-            attn_combine_output = F.sigmoid(
+            attn_combine_output = F.relu(
                 self.attn_combine(
                     torch.cat(
                         (decoder_input.view(-1, decoder_input.size()[2]),
