@@ -222,9 +222,9 @@ class MyDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, key):
         pair = self.pairs[key]
-        input_sequence = torch.full([self.max_seq_length], 0,
+        input_sequence = torch.full([self.max_seq_length], self.ignore_index,
                                     dtype=torch.long)
-        output_sequence = torch.full([self.max_seq_length], 0,
+        output_sequence = torch.full([self.max_seq_length], self.ignore_index,
                                      dtype=torch.long)
         input_sequence[:len(pair[0])] = torch.tensor(pair[0], dtype=torch.long)
         output_sequence[:len(pair[1])] = torch.tensor(pair[1], dtype=torch.long)
