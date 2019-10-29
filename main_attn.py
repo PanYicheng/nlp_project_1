@@ -159,7 +159,6 @@ class Corpus(object):
         # Add words to the dictionary
         with open(path, 'r') as f:
             lines = f.readlines()
-        self.dictionary.add_word('<SOS>')
         for line in lines:
             # append <eos> to every sample sequence
             words = line.split() + ['<EOS>']
@@ -198,7 +197,7 @@ class Corpus(object):
         for i, id in enumerate(id_list):
             if id == self.dictionary.word2idx['<IGNORE>']:
                 break
-        return ''.join(self.list_to_words(id_list[:i]))
+        return ' '.join(self.list_to_words(id_list[:i]))
 
     def pair_to_words(self, pair):
         input_words = self.list_to_words(pair[0])

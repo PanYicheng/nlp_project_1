@@ -30,6 +30,7 @@ class RNNModel(nn.Module):
 
         self.lockdrop = LockedDropout()
         self.input_embedding = nn.Embedding(ntoken, emsize)
+        self.target_embedding = nn.Embedding(ntoken, emsize)
         assert rnn_type in ['LSTM', 'GRU'], 'RNN type is not supported'
         if rnn_type == 'LSTM':
             self.encoder_rnns = torch.nn.LSTM(emsize, nhid, nlayers, dropout=self.dropoutrnn)
@@ -90,7 +91,7 @@ class RNNModel(nn.Module):
         # decoder_input shape: (1, N)
         decoder_hidden = encoder_hidden
         for seq_index in range(input.size()[0]):
-            decoder_input = self.input_embedding(decoder_input)
+            decoder_input = self.target_embedding(decoder_input)
             h_n_batchfirst = decoder_hidden.transpose(0, 1)
             h_n_batchfirst = h_n_batchfirst.reshape(batch_size, -1)
             # h_n_batchfirst shape: (N, nlayers*directions*nhid)
