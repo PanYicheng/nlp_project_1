@@ -76,7 +76,8 @@ class RNNModel(nn.Module):
         emb = self.lockdrop(emb, self.dropouti)
         # emb shape: (S, N, emsize)
         encoder_hidden = self.init_hidden(input.size()[1])
-        packed_emb = pack_padded_sequence(emb, input_lens, batch_first=False)
+        packed_emb = pack_padded_sequence(emb, input_lens, batch_first=False,
+                enforce_sorted=False)
         encoder_outputs, encoder_hidden = self.encoder_rnns(packed_emb, encoder_hidden)
         encoder_outputs, _ = pad_packed_sequence(encoder_outputs)
         encoder_outputs = self.lockdrop(encoder_outputs, self.dropout)
@@ -96,7 +97,7 @@ class RNNModel(nn.Module):
             attn_weights = F.softmax(self.attn(
                 torch.cat(
                     (decoder_input.view(-1, decoder_input.size()[2]),
-                     h_n_batchfirst), dim=1)))
+                        h_n_batchfirst), dim=1))[:, :encoder_outputs.size()[0]])
             # attn_weights shape: (N, S)
             attn_applied = torch.bmm(attn_weights.unsqueeze(1),
                                      encoder_outputs.transpose(0, 1))
