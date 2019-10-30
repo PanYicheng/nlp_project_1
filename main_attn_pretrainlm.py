@@ -340,7 +340,7 @@ def train(epoch):
         optimizer.zero_grad()
         output, hidden = model(inputs, targets, input_lens, target_lens,
                                return_decoder_all_h=False,
-                               use_teacher_forcing=np.random.rand()>0.5,
+                               use_teacher_forcing=np.random.rand() > 0.5,
                                SOS_index=corpus.dictionary.word2idx['<SOS>'])
         output = output.permute(1, 2, 0)
         targets = targets.permute(1, 0)
@@ -447,5 +447,5 @@ model_load(args.save)
 test_loss = evaluate(test_data)
 print('=' * 89)
 print('| End of training | test loss {:5.2f} | test ppl {:8.2f} | test bpc {:8.3f}'.format(
-    test_loss, np.exp(test_loss), test_loss / np.log(2)))
+    test_loss, math.exp(test_loss), test_loss / math.log(2)))
 print('=' * 89)
